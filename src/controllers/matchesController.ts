@@ -63,7 +63,7 @@ export const getMatchById = catchAsync(async (req: Request, res: Response) => {
 
 // Create a new match
 export const createMatch = catchAsync(async (req: Request, res: Response) => {
-  const { league_id, home_team_id, away_team_id, match_date, match_time, venue, status } = req.body;
+  const { league_id, home_team_id, away_team_id, match_date, match_time, venue, status, allow_draw } = req.body;
 
   const matchData: Partial<Match> = {
     league_id,
@@ -72,7 +72,8 @@ export const createMatch = catchAsync(async (req: Request, res: Response) => {
     match_date,
     match_time,
     venue,
-    status: status || 'scheduled'
+    status: status || 'scheduled',
+    allow_draw: allow_draw !== undefined ? allow_draw : true  // Default to true if not provided
   };
 
   return await baseController.create<Match>(res, container.supabase, 'matches', matchData);
@@ -81,7 +82,7 @@ export const createMatch = catchAsync(async (req: Request, res: Response) => {
 // Update a match
 export const updateMatch = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { league_id, home_team_id, away_team_id, match_date, match_time, venue, status } = req.body;
+  const { league_id, home_team_id, away_team_id, match_date, match_time, venue, status, allow_draw } = req.body;
 
   const matchData: Partial<Match> = {
     league_id,
@@ -90,8 +91,16 @@ export const updateMatch = catchAsync(async (req: Request, res: Response) => {
     match_date,
     match_time,
     venue,
-    status
+    status,
+    allow_draw
   };
+
+  // Remove undefined fields from matchData to prevent overwriting with undefined values
+  Object.keys(matchData).forEach(key => {
+    if (matchData[key as keyof Partial<Match>] === undefined) {
+      delete matchData[key as keyof Partial<Match>];
+    }
+  });
 
   return await baseController.update<Match>(res, container.supabase, 'matches', id, matchData, 'match_id');
 });

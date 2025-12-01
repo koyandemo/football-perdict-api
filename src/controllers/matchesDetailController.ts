@@ -394,22 +394,187 @@ export const updateScorePredictionVoteCount = async (req: Request, res: Response
   }
 };
 
-// Get comments for a match
+// Get comments for a match with pagination and replies
 export const getMatchComments = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-
-    const { data, error } = await supabase
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const offset = (page - 1) * limit;
+    
+    // First get top-level comments (not replies)
+    let { data: topLevelComments, error: commentsError } = await supabase
       .from('comments')
-      .select('*')
+      .select(`
+        *
+      `)
       .eq('match_id', id)
-      .order('timestamp', { ascending: false });
+      .is('parent_comment_id', null) // Only top-level comments
+      .order('timestamp', { ascending: false })
+      .range(offset, offset + limit - 1);
 
-    if (error) throw error;
+    if (commentsError) {
+      // Handle case where parent_comment_id column doesn't exist
+      if (commentsError.message && commentsError.message.includes('parent_comment_id')) {
+        // Try without the parent_comment_id filter
+        const { data: allComments, error: allCommentsError } = await supabase
+          .from('comments')
+          .select(`
+            *
+          `)
+          .eq('match_id', id)
+          .order('timestamp', { ascending: false })
+          .range(offset, offset + limit - 1);
+        
+        if (allCommentsError) throw allCommentsError;
+        
+        // Treat all comments as top-level comments
+        topLevelComments = allComments || [];
+      } else {
+        throw commentsError;
+      }
+    }
+    
+    // Ensure topLevelComments is always an array
+    topLevelComments = topLevelComments || [];
 
+    // Get reply count for each comment
+    const commentIds = topLevelComments.map(comment => comment.comment_id);
+    console.log("Getting reply counts for comment IDs:", commentIds);
+    let repliesInfo = [];
+    if (commentIds.length > 0) {
+      try {
+        const { data: replyCounts, error: repliesError } = await supabase.rpc('count_replies_for_comments', { comment_ids: commentIds });
+        
+        if (repliesError) {
+          // Handle case where stored procedure doesn't exist
+          console.log("Stored procedure not found, falling back to manual count");
+          // We'll count replies manually below
+        } else {
+          console.log("Reply counts from database:", replyCounts);
+          repliesInfo = replyCounts;
+        }
+      } catch (error) {
+        // Handle case where stored procedure doesn't exist
+        console.log("Stored procedure not found, falling back to manual count");
+        // We'll count replies manually below
+      }
+      
+      // If we don't have reply counts from the stored procedure, count manually
+      if (repliesInfo.length === 0) {
+        console.log("Manually counting replies for comment IDs:", commentIds);
+        // Get all comments for this match
+        const { data: allComments, error: allCommentsError } = await supabase
+          .from('comments')
+          .select('comment_id, parent_comment_id')
+          .eq('match_id', id);
+        
+        if (!allCommentsError && allComments) {
+          // Count replies for each top-level comment
+          repliesInfo = commentIds.map(commentId => {
+            const count = allComments.filter(comment => 
+              comment.parent_comment_id === commentId
+            ).length;
+            return {
+              parent_comment_id: commentId,
+              count: count
+            };
+          });
+          console.log("Manual reply counts:", repliesInfo);
+        }
+      }
+    }
+
+    // Get like counts for each comment
+    const formattedComments = await Promise.all(topLevelComments.map(async (comment) => {
+      const replyInfo = repliesInfo.find((r: any) => r.parent_comment_id === comment.comment_id);
+      
+      // Get like count using the new function
+      console.log(`Fetching like count for comment ${comment.comment_id}`);
+      let likeCount = 0;
+      try {
+        const { data: rpcLikeCount, error: likeCountError } = await supabase.rpc('count_reactions_for_comment', { 
+          comment_id_param: comment.comment_id, 
+          reaction_type_param: 'like' 
+        });
+        console.log(`Like count result for comment ${comment.comment_id}:`, { rpcLikeCount, likeCountError });
+        
+        if (likeCountError) {
+          // Handle case where stored procedure doesn't exist
+          console.log(`Stored procedure not found for comment ${comment.comment_id}, falling back to manual count`);
+          likeCount = 0;
+        } else {
+          likeCount = rpcLikeCount || 0;
+        }
+      } catch (error) {
+        // Handle case where stored procedure doesn't exist
+        console.log(`Stored procedure not found for comment ${comment.comment_id}, falling back to manual count`);
+        likeCount = 0;
+      }
+      
+      // If we don't have like count from the stored procedure, count manually
+      if (likeCount === 0) {
+        console.log(`Manually counting likes for comment ${comment.comment_id}`);
+        try {
+          const { count: manualLikeCount, error: manualCountError } = await supabase
+            .from('comment_reactions')
+            .select('*', { count: 'exact', head: true })
+            .eq('comment_id', comment.comment_id)
+            .eq('reaction_type', 'like');
+          
+          if (!manualCountError && manualLikeCount !== null) {
+            likeCount = manualLikeCount;
+            console.log(`Manual like count for comment ${comment.comment_id}:`, likeCount);
+          }
+        } catch (manualError) {
+          console.log(`Error manually counting likes for comment ${comment.comment_id}:`, manualError);
+        }
+      }
+      
+      const replyCount = replyInfo ? replyInfo.count : 0;
+      console.log(`Comment ${comment.comment_id} has ${replyCount} replies`);
+      return {
+        ...comment,
+        reply_count: replyCount,
+        like_count: likeCount || 0
+      };
+    }));
+
+    // Get total count for pagination
+    let { count: totalCount, error: countError } = await supabase
+      .from('comments')
+      .select('*', { count: 'exact', head: true })
+      .eq('match_id', id)
+      .is('parent_comment_id', null);
+
+    if (countError) {
+      // Handle case where parent_comment_id column doesn't exist
+      if (countError.message && countError.message.includes('parent_comment_id')) {
+        // Try without the parent_comment_id filter
+        const { count: allCount, error: allCountError } = await supabase
+          .from('comments')
+          .select('*', { count: 'exact', head: true })
+          .eq('match_id', id);
+        
+        if (allCountError) throw allCountError;
+        
+        // Use the count without the filter
+        totalCount = allCount;
+      } else {
+        throw countError;
+      }
+    }
+
+    console.log("Returning formatted comments with reply counts:", formattedComments.map(c => ({id: c.comment_id, reply_count: c.reply_count})));
     return res.status(200).json({
       success: true,
-      data
+      data: formattedComments,
+      pagination: {
+        current_page: page,
+        per_page: limit,
+        total: totalCount,
+        total_pages: totalCount ? Math.ceil(totalCount / limit) : 0
+      }
     });
   } catch (error: any) {
     console.error('Error fetching match comments:', error);
@@ -425,23 +590,72 @@ export const getMatchComments = async (req: Request, res: Response) => {
 export const createMatchComment = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { user_id, comment_text } = req.body;
+    const { user_id, comment_text, parent_comment_id } = req.body;
+    
+    console.log("Creating comment/reply with params:", { id, user_id, comment_text, parent_comment_id });
 
-    const { data, error } = await supabase
-      .from('comments')
-      .insert([{
-        match_id: parseInt(id),
-        user_id,
-        comment_text
-      }])
-      .select()
-      .single();
-
+    let data;
+    let error;
+    
+    // Try to insert with parent_comment_id first
+    if (parent_comment_id) {
+      const result = await supabase
+        .from('comments')
+        .insert([{
+          match_id: parseInt(id),
+          user_id,
+          comment_text,
+          parent_comment_id
+        }])
+        .select(`
+          *
+        `)
+        .single();
+      
+      data = result.data;
+      error = result.error;
+      
+      // Handle case where parent_comment_id column doesn't exist
+      if (error && error.message && error.message.includes('parent_comment_id')) {
+        // Try without parent_comment_id
+        const fallbackResult = await supabase
+          .from('comments')
+          .insert([{
+            match_id: parseInt(id),
+            user_id,
+            comment_text
+          }])
+          .select(`
+            *
+          `)
+          .single();
+        
+        data = fallbackResult.data;
+        error = fallbackResult.error;
+      }
+    } else {
+      // No parent_comment_id, insert normally
+      const result = await supabase
+        .from('comments')
+        .insert([{
+          match_id: parseInt(id),
+          user_id,
+          comment_text
+        }])
+        .select(`
+          *
+        `)
+        .single();
+      
+      data = result.data;
+      error = result.error;
+    }
+    
     if (error) throw error;
 
     return res.status(201).json({
       success: true,
-      message: 'Comment created successfully',
+      message: parent_comment_id ? 'Reply created successfully' : 'Comment created successfully',
       data
     });
   } catch (error: any) {
@@ -449,6 +663,258 @@ export const createMatchComment = async (req: Request, res: Response) => {
     return res.status(500).json({
       success: false,
       message: 'Failed to create comment',
+      error: error.message
+    });
+  }
+};
+
+// Get replies for a comment with pagination
+export const getCommentReplies = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params; // comment_id
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 2;
+    const offset = (page - 1) * limit;
+    
+    const { data: replies, error } = await supabase
+      .from('comments')
+      .select(`
+        *
+      `)
+      .eq('parent_comment_id', id)
+      .order('timestamp', { ascending: true }) // Oldest first for replies
+      .range(offset, offset + limit - 1);
+
+    if (error) {
+      // Handle case where parent_comment_id column doesn't exist
+      if (error.message && error.message.includes('parent_comment_id')) {
+        return res.status(200).json({
+          success: true,
+          data: [],
+          pagination: {
+            current_page: page,
+            per_page: limit,
+            total: 0,
+            total_pages: 0
+          }
+        });
+      }
+      throw error;
+    }
+
+    // Format replies with like counts
+    const formattedReplies = await Promise.all(replies.map(async (reply: any) => {
+      // Get like count using the new function
+      const { data: likeCount, error: likeCountError } = await supabase.rpc('count_reactions_for_comment', { 
+        comment_id_param: reply.comment_id, 
+        reaction_type_param: 'like' 
+      });
+      
+      return {
+        ...reply,
+        like_count: likeCountError ? 0 : likeCount || 0
+      };
+    }));
+
+    // Get total count for pagination
+    const { count: totalCount, error: countError } = await supabase
+      .from('comments')
+      .select('*', { count: 'exact', head: true })
+      .eq('parent_comment_id', id);
+
+    if (countError) {
+      // Handle case where parent_comment_id column doesn't exist
+      if (countError.message && countError.message.includes('parent_comment_id')) {
+        return res.status(200).json({
+          success: true,
+          data: formattedReplies,
+          pagination: {
+            current_page: page,
+            per_page: limit,
+            total: 0,
+            total_pages: 0
+          }
+        });
+      }
+      throw countError;
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: formattedReplies,
+      pagination: {
+        current_page: page,
+        per_page: limit,
+        total: totalCount || 0,
+        total_pages: totalCount ? Math.ceil(totalCount / limit) : 0
+      }
+    });
+  } catch (error: any) {
+    console.error('Error fetching comment replies:', error);
+    
+    // Handle case where parent_comment_id column doesn't exist
+    if (error.message && error.message.includes('parent_comment_id')) {
+      const { id } = req.params; // comment_id
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 2;
+      
+      return res.status(200).json({
+        success: true,
+        data: [],
+        pagination: {
+          current_page: page,
+          per_page: limit,
+          total: 0,
+          total_pages: 0
+        }
+      });
+    }
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch comment replies',
+      error: error.message
+    });
+  }
+};
+
+// Add reaction to a comment
+export const addCommentReaction = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params; // comment_id
+    const { user_id, reaction_type } = req.body;
+
+    // Check if reaction already exists
+    const { data: existingReaction, error: fetchError } = await supabase
+      .from('comment_reactions')
+      .select('*')
+      .eq('comment_id', id)
+      .eq('user_id', user_id)
+      .eq('reaction_type', reaction_type || 'like')
+      .maybeSingle();
+
+    // Handle case where comment_reactions table doesn't exist
+    if (fetchError) {
+      // If table doesn't exist, return a graceful response
+      if (fetchError.message && fetchError.message.includes('comment_reactions')) {
+        return res.status(200).json({
+          success: true,
+          message: 'Reaction feature not available',
+          data: {
+            action: 'added',
+            reaction_count: 0
+          }
+        });
+      }
+      // For other errors, throw the error
+      throw fetchError;
+    }
+
+    let result;
+    if (existingReaction) {
+      // Remove existing reaction (toggle off)
+      const { error: deleteError } = await supabase
+        .from('comment_reactions')
+        .delete()
+        .eq('reaction_id', existingReaction.reaction_id);
+
+      if (deleteError) throw deleteError;
+      
+      result = { action: 'removed' };
+    } else {
+      // Add new reaction
+      const { data, error: insertError } = await supabase
+        .from('comment_reactions')
+        .insert([{
+          comment_id: parseInt(id),
+          user_id,
+          reaction_type: reaction_type || 'like'
+        }])
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+      
+      result = { action: 'added', data };
+    }
+
+    // Get updated reaction count
+    const { count: reactionCount, error: countError } = await supabase
+      .from('comment_reactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('comment_id', id)
+      .eq('reaction_type', reaction_type || 'like');
+
+    // Handle case where comment_reactions table doesn't exist for count query
+    if (countError) {
+      // If table doesn't exist, return a graceful response
+      if (countError.message && countError.message.includes('comment_reactions')) {
+        return res.status(200).json({
+          success: true,
+          message: 'Reaction feature not available',
+          data: {
+            ...result,
+            reaction_count: 0
+          }
+        });
+      }
+      // For other errors, throw the error
+      throw countError;
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: existingReaction ? 'Reaction removed successfully' : 'Reaction added successfully',
+      data: {
+        ...result,
+        reaction_count: reactionCount || 0
+      }
+    });
+  } catch (error: any) {
+    console.error('Error adding comment reaction:', error);
+    
+    // Handle case where comment_reactions table doesn't exist
+    if (error.message && error.message.includes('comment_reactions')) {
+      return res.status(200).json({
+        success: true,
+        message: 'Reaction feature not available',
+        data: {
+          action: 'added',
+          reaction_count: 0
+        }
+      });
+    }
+    
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to add reaction',
+      error: error.message
+    });
+  }
+};
+
+// Delete a comment (and its replies)
+export const deleteMatchComment = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params; // comment_id
+
+    // Delete the comment (and cascade to replies due to foreign key constraint)
+    const { error } = await supabase
+      .from('comments')
+      .delete()
+      .eq('comment_id', id);
+
+    if (error) throw error;
+
+    return res.status(200).json({
+      success: true,
+      message: 'Comment deleted successfully'
+    });
+  } catch (error: any) {
+    console.error('Error deleting match comment:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to delete comment',
       error: error.message
     });
   }

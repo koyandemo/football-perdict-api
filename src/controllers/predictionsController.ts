@@ -87,6 +87,90 @@ export const getPredictionById = async (req: Request, res: Response) => {
   }
 };
 
+// Helper function to update match vote counts based on actual user predictions
+const updateMatchVoteCountsFromPredictions = async (match_id: number) => {
+  try {
+    // Get all predictions for this match
+    const { data: predictions, error: fetchError } = await supabase
+      .from('user_predictions')
+      .select('predicted_winner')
+      .eq('match_id', match_id);
+
+    if (fetchError) {
+      throw fetchError;
+    }
+
+    // Count votes for each outcome
+    let home_votes = 0;
+    let draw_votes = 0;
+    let away_votes = 0;
+
+    predictions.forEach(prediction => {
+      switch (prediction.predicted_winner) {
+        case 'Home':
+          home_votes++;
+          break;
+        case 'Draw':
+          draw_votes++;
+          break;
+        case 'Away':
+          away_votes++;
+          break;
+      }
+    });
+
+    const total_votes = home_votes + draw_votes + away_votes;
+
+    // Check if vote counts already exist for this match
+    const { data: existingVoteCounts, error: checkError } = await supabase
+      .from('match_vote_counts')
+      .select('vote_id')
+      .eq('match_id', match_id)
+      .single();
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      throw checkError;
+    }
+
+    if (existingVoteCounts) {
+      // Update existing vote counts
+      const { data, error } = await supabase
+        .from('match_vote_counts')
+        .update({
+          home_votes,
+          draw_votes,
+          away_votes,
+          total_votes
+        })
+        .eq('match_id', match_id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    } else {
+      // Create new vote counts
+      const { data, error } = await supabase
+        .from('match_vote_counts')
+        .insert([{
+          match_id,
+          home_votes,
+          draw_votes,
+          away_votes,
+          total_votes
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    }
+  } catch (error) {
+    console.error('Error updating match vote counts from predictions:', error);
+    throw error;
+  }
+};
+
 // Create a new prediction
 export const createPrediction = async (req: Request, res: Response) => {
   try {
@@ -101,30 +185,70 @@ export const createPrediction = async (req: Request, res: Response) => {
       });
     }
 
-    const { data, error } = await supabase
+    // First check if a prediction already exists for this user and match
+    const { data: existingPrediction, error: fetchError } = await supabase
       .from('user_predictions')
-      .insert([{
-        user_id,
-        match_id,
-        predicted_winner
-      }])
-      .select()
-      .single();
+      .select('*')
+      .eq('user_id', user_id)
+      .eq('match_id', match_id)
+      .maybeSingle();
 
-    if (error) {
-      throw error;
+    if (fetchError) {
+      throw fetchError;
+    }
+
+    let result;
+    if (existingPrediction) {
+      // Update existing prediction
+      const { data, error } = await supabase
+        .from('user_predictions')
+        .update({ predicted_winner })
+        .eq('prediction_id', existingPrediction.prediction_id)
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      result = data;
+    } else {
+      // Create new prediction
+      const { data, error } = await supabase
+        .from('user_predictions')
+        .insert([{
+          user_id,
+          match_id,
+          predicted_winner
+        }])
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      result = data;
+    }
+
+    // Update match vote counts based on actual predictions
+    try {
+      await updateMatchVoteCountsFromPredictions(parseInt(match_id));
+    } catch (voteCountError) {
+      console.error('Failed to update vote counts:', voteCountError);
+      // Don't fail the whole request if vote count update fails
     }
 
     return res.status(201).json({
       success: true,
-      message: 'Prediction created successfully',
-      data
+      message: existingPrediction ? 'Prediction updated successfully' : 'Prediction created successfully',
+      data: result
     });
   } catch (error: any) {
-    console.error('Error creating prediction:', error);
+    console.error('Error creating/updating prediction:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to create prediction',
+      message: 'Failed to create/update prediction',
       error: error.message
     });
   }
@@ -163,6 +287,14 @@ export const updatePrediction = async (req: Request, res: Response) => {
       });
     }
 
+    // Update match vote counts based on actual predictions
+    try {
+      await updateMatchVoteCountsFromPredictions(data.match_id);
+    } catch (voteCountError) {
+      console.error('Failed to update vote counts:', voteCountError);
+      // Don't fail the whole request if vote count update fails
+    }
+
     return res.status(200).json({
       success: true,
       message: 'Prediction updated successfully',
@@ -183,6 +315,24 @@ export const deletePrediction = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
+    // First get the prediction to get the match_id before deleting
+    const { data: predictionToDelete, error: fetchError } = await supabase
+      .from('user_predictions')
+      .select('match_id')
+      .eq('prediction_id', id)
+      .single();
+
+    if (fetchError) {
+      throw fetchError;
+    }
+
+    if (!predictionToDelete) {
+      return res.status(404).json({
+        success: false,
+        message: 'Prediction not found'
+      });
+    }
+
     const { error } = await supabase
       .from('user_predictions')
       .delete()
@@ -190,6 +340,14 @@ export const deletePrediction = async (req: Request, res: Response) => {
 
     if (error) {
       throw error;
+    }
+
+    // Update match vote counts based on actual predictions
+    try {
+      await updateMatchVoteCountsFromPredictions(predictionToDelete.match_id);
+    } catch (voteCountError) {
+      console.error('Failed to update vote counts:', voteCountError);
+      // Don't fail the whole request if vote count update fails
     }
 
     return res.status(200).json({
@@ -247,7 +405,7 @@ export const voteScorePrediction = async (req: Request, res: Response) => {
       .eq('match_id', match_id)
       .eq('home_score', home_score)
       .eq('away_score', away_score)
-      .single();
+      .maybeSingle();
 
     if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows returned
       throw fetchError;

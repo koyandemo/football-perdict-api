@@ -268,7 +268,10 @@ import {
   voteScorePrediction,
   updateScorePredictionVoteCount,
   getMatchComments,
-  createMatchComment
+  createMatchComment,
+  getCommentReplies,
+  addCommentReaction,
+  deleteMatchComment
 } from '../controllers/matchesDetailController';
 
 /**
@@ -696,5 +699,152 @@ router.get('/:id/vote-counts', getMatchVoteCounts);
  *         $ref: '#/components/responses/ServerError'
  * */
 router.post('/:id/vote-counts', updateMatchVoteCounts);
+
+/**
+ * @swagger
+ * /api/matches/{id}/comments/replies:
+ *   get:
+ *     summary: Get replies for a comment with pagination
+ *     tags: [Matches]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Comment ID
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 5
+ *         description: Number of replies per page
+ *     responses:
+ *       200:
+ *         description: List of comment replies
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Comment'
+ *                 pagination:
+ *                   type: object
+ *                   properties:
+ *                     current_page:
+ *                       type: integer
+ *                     per_page:
+ *                       type: integer
+ *                     total:
+ *                       type: integer
+ *                     total_pages:
+ *                       type: integer
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ * */
+router.get('/:id/comments/replies', getCommentReplies);
+
+/**
+ * @swagger
+ * /api/matches/{id}/comments/reactions:
+ *   post:
+ *     summary: Add or remove reaction to a comment
+ *     tags: [Matches]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Comment ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - user_id
+ *             properties:
+ *               user_id:
+ *                 type: integer
+ *                 example: 1
+ *               reaction_type:
+ *                 type: string
+ *                 example: "like"
+ *     responses:
+ *       200:
+ *         description: Reaction added or removed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Reaction added successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     action:
+ *                       type: string
+ *                       example: "added"
+ *                     reaction_count:
+ *                       type: integer
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ * */
+router.post('/:id/comments/reactions', addCommentReaction);
+
+/**
+ * @swagger
+ * /api/matches/{id}/comments:
+ *   delete:
+ *     summary: Delete a comment and its replies
+ *     tags: [Matches]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Comment ID
+ *     responses:
+ *       200:
+ *         description: Comment deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Comment deleted successfully"
+ *       404:
+ *         $ref: '#/components/responses/NotFoundError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ * */
+router.delete('/:id/comments', deleteMatchComment);
 
 export default router;
