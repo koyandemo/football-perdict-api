@@ -4,7 +4,8 @@ import {
   loginUser,
   authenticateUser,
   isAdmin,
-  User
+  User,
+  updateUserProfile
 } from '../services/userService';
 
 /**
@@ -12,7 +13,7 @@ import {
  */
 export async function register(req: Request, res: Response) {
   try {
-    const { name, email, password, provider = 'email', type = 'user' } = req.body;
+    const { name, email, password, provider = 'email', type = 'user', avatar_url, favorite_team_id } = req.body;
 
     // Validate required fields
     if (!name || !email || (provider === 'email' && !password)) {
@@ -28,7 +29,9 @@ export async function register(req: Request, res: Response) {
       email,
       provider,
       password,
-      type
+      type,
+      avatar_url,
+      favorite_team_id
     });
 
     if (!result.success) {
@@ -110,6 +113,46 @@ export async function getProfile(req: Request, res: Response) {
 }
 
 /**
+ * Update current user profile
+ */
+export async function updateProfile(req: Request, res: Response) {
+  try {
+    // Get user from request (set by auth middleware)
+    const user = (req as any).user;
+    
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized'
+      });
+    }
+
+    // Get profile data from request body
+    const { name, avatar_url, favorite_team_id } = req.body;
+
+    // Update user profile
+    const result = await updateUserProfile(user.user_id, {
+      name,
+      avatar_url,
+      favorite_team_id
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error('Update profile error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error while updating profile',
+      error: error.message
+    });
+  }
+}
+
+/**
  * Middleware to authenticate user
  */
 export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -125,6 +168,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    
     const user = await authenticateUser(token);
 
     if (!user) {

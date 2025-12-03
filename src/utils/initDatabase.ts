@@ -33,7 +33,6 @@ export const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
 // Function to initialize the database schema
 export async function initDatabase() {
   try {
-    console.log('Initializing database schema...');
     
     // Create Leagues table
     const { error: leaguesError } = await supabase.rpc('execute_sql', {
@@ -67,7 +66,6 @@ export async function initDatabase() {
       throw leaguesError;
     }
     
-    console.log('✓ Leagues table created successfully');
     
     // Create Teams table
     const { error: teamsError } = await supabase.rpc('execute_sql', {
@@ -102,7 +100,6 @@ export async function initDatabase() {
       throw teamsError;
     }
     
-    console.log('✓ Teams table created successfully');
     
     // Create Matches table
     const { error: matchesError } = await supabase.rpc('execute_sql', {
@@ -141,7 +138,6 @@ export async function initDatabase() {
       throw matchesError;
     }
     
-    console.log('✓ Matches table created successfully');
     
     // Create other necessary tables (simplified)
     const { error: otherTablesError } = await supabase.rpc('execute_sql', {
@@ -192,7 +188,6 @@ export async function initDatabase() {
       throw otherTablesError;
     }
     
-    console.log('✓ Other tables created successfully');
     
     // Add RLS policies for user_predictions, score_predictions, and comments tables
     const { error: rlsPoliciesError } = await supabase.rpc('execute_sql', {
@@ -243,7 +238,6 @@ export async function initDatabase() {
       throw rlsPoliciesError;
     }
     
-    console.log('✓ RLS policies added successfully');
     
     // Create slug functions and triggers
     const { error: functionsError } = await supabase.rpc('execute_sql', {
@@ -294,12 +288,7 @@ export async function initDatabase() {
       throw functionsError;
     }
     
-    console.log('✓ Functions and triggers created successfully');
     
-    console.log('\n🎉 Database initialization completed successfully!');
-    console.log('\nNext steps:');
-    console.log('1. Restart your API server: npm run dev');
-    console.log('2. Test the league functionality in your admin panel');
     
   } catch (error) {
     console.error('Database initialization failed:', error);
@@ -310,7 +299,6 @@ export async function initDatabase() {
 // Run initialization if this file is executed directly
 if (require.main === module) {
   initDatabase().then(() => {
-    console.log('Database setup completed');
     process.exit(0);
   }).catch((error) => {
     console.error('Database setup failed:', error);

@@ -62,8 +62,8 @@ app.use((req, res) => {
 });
 // Start server
 app.listen(PORT, () => {
-    console.log(`Football Prediction API is running on port ${PORT}`);
-    console.log(`Swagger UI available at http://localhost:${PORT}/api-docs`);
+    (`Football Prediction API is running on port ${PORT}`);
+    (`Swagger UI available at http://localhost:${PORT}/api-docs`);
 });
 exports.default = app;
 //# sourceMappingURL=server.js.map

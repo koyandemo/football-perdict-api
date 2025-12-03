@@ -10,6 +10,8 @@ export interface User {
   provider: 'google' | 'facebook' | 'twitter' | 'email';
   password?: string;
   type: 'user' | 'admin' | 'seed';
+  avatar_url?: string;
+  favorite_team_id?: number;
   created_at?: string;
   updated_at?: string;
 }
@@ -90,8 +92,10 @@ export function generateToken(user: Omit<User, 'password'>): string {
 export function verifyToken(token: string): any {
   const secret = process.env.JWT_SECRET || 'football_prediction_secret_key';
   try {
-    return jwt.verify(token, secret);
+    const decoded = jwt.verify(token, secret);
+    return decoded;
   } catch (error) {
+    console.error('Token verification failed:', error);
     return null;
   }
 }
@@ -111,14 +115,22 @@ export async function registerUser(userData: Omit<User, 'user_id' | 'created_at'
       .single();
 
     if (existingUser) {
+      // If user exists but with a different provider, we might want to update the provider
+      // For now, we'll just return the existing user
+      const { password, ...userWithoutPassword } = existingUser as User;
+      
+      // Generate token
+      const token = generateToken(userWithoutPassword);
+      
       return {
-        success: false,
-        message: 'User already exists with this email',
-        error: 'USER_EXISTS'
+        success: true,
+        message: 'User already exists',
+        token,
+        user: userWithoutPassword
       };
     }
 
-    // Hash password if provider is email
+    // Hash password if provider is email and password is provided
     let hashedPassword: string | undefined;
     if (userData.provider === 'email' && userData.password) {
       hashedPassword = await hashPassword(userData.password);
@@ -132,7 +144,9 @@ export async function registerUser(userData: Omit<User, 'user_id' | 'created_at'
         email: userData.email,
         provider: userData.provider,
         password: hashedPassword,
-        type: userData.type || 'user'
+        type: userData.type || 'user',
+        avatar_url: userData.avatar_url,
+        favorite_team_id: userData.favorite_team_id
       } as any)
       .select()
       .single();
@@ -189,14 +203,16 @@ export async function loginUser(email: string, password: string): Promise<AuthRe
       };
     }
 
-    // Check if password matches
+    // Check if password matches (only for email provider)
     const userData = user as User;
-    if (!userData.password || !(await comparePassword(password, userData.password))) {
-      return {
-        success: false,
-        message: 'Invalid email or password',
-        error: 'INVALID_CREDENTIALS'
-      };
+    if (userData.provider === 'email') {
+      if (!userData.password || !(await comparePassword(password, userData.password))) {
+        return {
+          success: false,
+          message: 'Invalid email or password',
+          error: 'INVALID_CREDENTIALS'
+        };
+      }
     }
 
     // Remove password from response
@@ -234,12 +250,63 @@ export async function getUserById(userId: number): Promise<User | null> {
       .single();
 
     if (error) {
+      console.error('Error fetching user:', error);
       return null;
     }
 
     return data as User;
   } catch (error) {
+    console.error('Exception in getUserById:', error);
     return null;
+  }
+}
+
+/**
+ * Update user profile
+ */
+export async function updateUserProfile(userId: number, profileData: Partial<Omit<User, 'user_id' | 'email' | 'provider' | 'password' | 'type' | 'created_at' | 'updated_at'>>): Promise<AuthResponse> {
+  try {
+    const supabase = getSupabaseClient();
+    
+    // Update user profile
+    const { data, error } = await supabase
+      .from('users')
+      .update({
+        name: profileData.name,
+        avatar_url: profileData.avatar_url,
+        favorite_team_id: profileData.favorite_team_id,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      return {
+        success: false,
+        message: 'Failed to update profile',
+        error: error.message
+      };
+    }
+
+    // Remove password from response
+    const { password, ...userWithoutPassword } = data as User;
+
+    // Generate new token
+    const token = generateToken(userWithoutPassword);
+
+    return {
+      success: true,
+      message: 'Profile updated successfully',
+      token,
+      user: userWithoutPassword
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      message: 'Failed to update profile',
+      error: error.message
+    };
   }
 }
 
@@ -286,6 +353,7 @@ export async function authenticateUser(token: string): Promise<User | null> {
     const user = await getUserById(decoded.user_id);
     return user;
   } catch (error) {
+    console.error('Error in authenticateUser:', error);
     return null;
   }
 }

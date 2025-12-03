@@ -30,9 +30,33 @@ export const getAllComments = async (req: Request, res: Response) => {
       throw error;
     }
 
+    // Fetch user data for each comment
+    const commentsWithUsers = await Promise.all(data.map(async (comment: any) => {
+      let userData = null;
+      if (comment.user_id) {
+        try {
+          const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('name, email, avatar_url')
+            .eq('user_id', comment.user_id)
+            .single();
+          
+          if (!userError && user) {
+            userData = user;
+          }
+        } catch (userError) {
+        }
+      }
+      
+      return {
+        ...comment,
+        user: userData
+      };
+    }));
+
     return res.status(200).json({
       success: true,
-      data
+      data: commentsWithUsers
     });
   } catch (error: any) {
     console.error('Error fetching comments:', error);
@@ -73,9 +97,32 @@ export const getCommentById = async (req: Request, res: Response) => {
       });
     }
 
+    // Fetch user data for the comment
+    let userData = null;
+    if (data.user_id) {
+      try {
+        const { data: user, error: userError } = await supabase
+          .from('users')
+          .select('name, email, avatar_url')
+          .eq('user_id', data.user_id)
+          .single();
+        
+        if (!userError && user) {
+          userData = user;
+        }
+      } catch (userError) {
+      }
+    }
+
+    // Attach user data to the response
+    const commentWithUser = {
+      ...data,
+      user: userData
+    };
+
     return res.status(200).json({
       success: true,
-      data
+      data: commentWithUser
     });
   } catch (error: any) {
     console.error('Error fetching comment:', error);
@@ -99,17 +146,42 @@ export const createComment = async (req: Request, res: Response) => {
         match_id,
         comment_text
       }])
-      .select()
+      .select(`
+        *
+      `)
       .single();
 
     if (error) {
       throw error;
     }
 
+    // Fetch user data for the created comment
+    let userData = null;
+    if (data.user_id) {
+      try {
+        const { data: user, error: userError } = await supabase
+          .from('users')
+          .select('name, email, avatar_url')
+          .eq('user_id', data.user_id)
+          .single();
+        
+        if (!userError && user) {
+          userData = user;
+        }
+      } catch (userError) {
+      }
+    }
+
+    // Attach user data to the response
+    const commentWithUser = {
+      ...data,
+      user: userData
+    };
+
     return res.status(201).json({
       success: true,
       message: 'Comment created successfully',
-      data
+      data: commentWithUser
     });
   } catch (error: any) {
     console.error('Error creating comment:', error);

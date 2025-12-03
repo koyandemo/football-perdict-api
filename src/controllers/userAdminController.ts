@@ -113,7 +113,6 @@ export async function createUser(req: Request, res: Response) {
         message: 'Missing required fields'
       });
     }
-    console.log("116")
     // Check if user already exists
     const { data: existingUser, error: fetchError } = await supabaseAdmin
       .from('users')

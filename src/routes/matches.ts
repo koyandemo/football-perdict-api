@@ -133,7 +133,16 @@ router.get('/:id', getMatchById);
  *                 example: "Old Trafford"
  *               status:
  *                 type: string
- *                 example: "Upcoming"
+ *                 example: "scheduled"
+ *               allow_draw:
+ *                 type: boolean
+ *                 example: true
+ *               home_score:
+ *                 type: integer
+ *                 example: 2
+ *               away_score:
+ *                 type: integer
+ *                 example: 1
  *     responses:
  *       201:
  *         description: Match created successfully
@@ -198,7 +207,16 @@ router.post('/', validateMatch, createMatch);
  *                 example: "Old Trafford"
  *               status:
  *                 type: string
- *                 example: "Upcoming"
+ *                 example: "scheduled"
+ *               allow_draw:
+ *                 type: boolean
+ *                 example: true
+ *               home_score:
+ *                 type: integer
+ *                 example: 2
+ *               away_score:
+ *                 type: integer
+ *                 example: 1
  *     responses:
  *       200:
  *         description: Match updated successfully

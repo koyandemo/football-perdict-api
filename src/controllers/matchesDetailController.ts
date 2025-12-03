@@ -440,7 +440,6 @@ export const getMatchComments = async (req: Request, res: Response) => {
 
     // Get reply count for each comment
     const commentIds = topLevelComments.map(comment => comment.comment_id);
-    console.log("Getting reply counts for comment IDs:", commentIds);
     let repliesInfo = [];
     if (commentIds.length > 0) {
       try {
@@ -448,21 +447,17 @@ export const getMatchComments = async (req: Request, res: Response) => {
         
         if (repliesError) {
           // Handle case where stored procedure doesn't exist
-          console.log("Stored procedure not found, falling back to manual count");
           // We'll count replies manually below
         } else {
-          console.log("Reply counts from database:", replyCounts);
           repliesInfo = replyCounts;
         }
       } catch (error) {
         // Handle case where stored procedure doesn't exist
-        console.log("Stored procedure not found, falling back to manual count");
         // We'll count replies manually below
       }
       
       // If we don't have reply counts from the stored procedure, count manually
       if (repliesInfo.length === 0) {
-        console.log("Manually counting replies for comment IDs:", commentIds);
         // Get all comments for this match
         const { data: allComments, error: allCommentsError } = await supabase
           .from('comments')
@@ -480,41 +475,35 @@ export const getMatchComments = async (req: Request, res: Response) => {
               count: count
             };
           });
-          console.log("Manual reply counts:", repliesInfo);
         }
       }
     }
 
-    // Get like counts for each comment
+    // Get like counts for each comment and attach user data
     const formattedComments = await Promise.all(topLevelComments.map(async (comment) => {
       const replyInfo = repliesInfo.find((r: any) => r.parent_comment_id === comment.comment_id);
       
       // Get like count using the new function
-      console.log(`Fetching like count for comment ${comment.comment_id}`);
       let likeCount = 0;
       try {
         const { data: rpcLikeCount, error: likeCountError } = await supabase.rpc('count_reactions_for_comment', { 
           comment_id_param: comment.comment_id, 
           reaction_type_param: 'like' 
         });
-        console.log(`Like count result for comment ${comment.comment_id}:`, { rpcLikeCount, likeCountError });
         
         if (likeCountError) {
           // Handle case where stored procedure doesn't exist
-          console.log(`Stored procedure not found for comment ${comment.comment_id}, falling back to manual count`);
           likeCount = 0;
         } else {
           likeCount = rpcLikeCount || 0;
         }
       } catch (error) {
         // Handle case where stored procedure doesn't exist
-        console.log(`Stored procedure not found for comment ${comment.comment_id}, falling back to manual count`);
         likeCount = 0;
       }
       
       // If we don't have like count from the stored procedure, count manually
       if (likeCount === 0) {
-        console.log(`Manually counting likes for comment ${comment.comment_id}`);
         try {
           const { count: manualLikeCount, error: manualCountError } = await supabase
             .from('comment_reactions')
@@ -524,17 +513,32 @@ export const getMatchComments = async (req: Request, res: Response) => {
           
           if (!manualCountError && manualLikeCount !== null) {
             likeCount = manualLikeCount;
-            console.log(`Manual like count for comment ${comment.comment_id}:`, likeCount);
           }
         } catch (manualError) {
-          console.log(`Error manually counting likes for comment ${comment.comment_id}:`, manualError);
+        }
+      }
+      
+      // Fetch user data for the comment
+      let userData = null;
+      if (comment.user_id) {
+        try {
+          const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('name, email, avatar_url')
+            .eq('user_id', comment.user_id)
+            .single();
+          
+          if (!userError && user) {
+            userData = user;
+          }
+        } catch (userError) {
         }
       }
       
       const replyCount = replyInfo ? replyInfo.count : 0;
-      console.log(`Comment ${comment.comment_id} has ${replyCount} replies`);
       return {
         ...comment,
+        user: userData,
         reply_count: replyCount,
         like_count: likeCount || 0
       };
@@ -565,7 +569,6 @@ export const getMatchComments = async (req: Request, res: Response) => {
       }
     }
 
-    console.log("Returning formatted comments with reply counts:", formattedComments.map(c => ({id: c.comment_id, reply_count: c.reply_count})));
     return res.status(200).json({
       success: true,
       data: formattedComments,
@@ -592,7 +595,6 @@ export const createMatchComment = async (req: Request, res: Response) => {
     const { id } = req.params;
     const { user_id, comment_text, parent_comment_id } = req.body;
     
-    console.log("Creating comment/reply with params:", { id, user_id, comment_text, parent_comment_id });
 
     let data;
     let error;
@@ -653,10 +655,33 @@ export const createMatchComment = async (req: Request, res: Response) => {
     
     if (error) throw error;
 
+    // Fetch user data for the created comment
+    let userData = null;
+    if (data.user_id) {
+      try {
+        const { data: user, error: userError } = await supabase
+          .from('users')
+          .select('name, email, avatar_url')
+          .eq('user_id', data.user_id)
+          .single();
+        
+        if (!userError && user) {
+          userData = user;
+        }
+      } catch (userError) {
+      }
+    }
+
+    // Attach user data to the response
+    const commentWithUser = {
+      ...data,
+      user: userData
+    };
+
     return res.status(201).json({
       success: true,
       message: parent_comment_id ? 'Reply created successfully' : 'Comment created successfully',
-      data
+      data: commentWithUser
     });
   } catch (error: any) {
     console.error('Error creating match comment:', error);
@@ -702,7 +727,7 @@ export const getCommentReplies = async (req: Request, res: Response) => {
       throw error;
     }
 
-    // Format replies with like counts
+    // Format replies with like counts and user data
     const formattedReplies = await Promise.all(replies.map(async (reply: any) => {
       // Get like count using the new function
       const { data: likeCount, error: likeCountError } = await supabase.rpc('count_reactions_for_comment', { 
@@ -710,8 +735,26 @@ export const getCommentReplies = async (req: Request, res: Response) => {
         reaction_type_param: 'like' 
       });
       
+      // Fetch user data for the reply
+      let userData = null;
+      if (reply.user_id) {
+        try {
+          const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('name, email, avatar_url')
+            .eq('user_id', reply.user_id)
+            .single();
+          
+          if (!userError && user) {
+            userData = user;
+          }
+        } catch (userError) {
+        }
+      }
+      
       return {
         ...reply,
+        user: userData,
         like_count: likeCountError ? 0 : likeCount || 0
       };
     }));

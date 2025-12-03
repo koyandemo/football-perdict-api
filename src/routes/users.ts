@@ -3,6 +3,7 @@ import {
   register,
   login,
   getProfile,
+  updateProfile,
   authenticate,
   requireAdmin
 } from '../controllers/userController';
@@ -27,6 +28,7 @@ router.post('/admin/create', createUser);
 
 // Protected routes
 router.get('/profile', authenticate, getProfile);
+router.put('/profile', authenticate, updateProfile);
 
 // Admin routes - protected by admin middleware
 router.get('/', authenticate, requireAdmin, getAllUsers);

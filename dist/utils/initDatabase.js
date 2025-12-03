@@ -33,7 +33,7 @@ exports.supabase = (0, supabase_js_1.createClient)(supabaseUrl, supabaseServiceR
 // Function to initialize the database schema
 async function initDatabase() {
     try {
-        console.log('Initializing database schema...');
+        ('Initializing database schema...');
         // Create Leagues table
         const { error: leaguesError } = await exports.supabase.rpc('execute_sql', {
             sql: `
@@ -64,7 +64,7 @@ async function initDatabase() {
             console.error('Error creating leagues table:', leaguesError);
             throw leaguesError;
         }
-        console.log('✓ Leagues table created successfully');
+        ('✓ Leagues table created successfully');
         // Create Teams table
         const { error: teamsError } = await exports.supabase.rpc('execute_sql', {
             sql: `
@@ -96,7 +96,7 @@ async function initDatabase() {
             console.error('Error creating teams table:', teamsError);
             throw teamsError;
         }
-        console.log('✓ Teams table created successfully');
+        ('✓ Teams table created successfully');
         // Create Matches table
         const { error: matchesError } = await exports.supabase.rpc('execute_sql', {
             sql: `
@@ -132,7 +132,7 @@ async function initDatabase() {
             console.error('Error creating matches table:', matchesError);
             throw matchesError;
         }
-        console.log('✓ Matches table created successfully');
+        ('✓ Matches table created successfully');
         // Create other necessary tables (simplified)
         const { error: otherTablesError } = await exports.supabase.rpc('execute_sql', {
             sql: `
@@ -180,7 +180,7 @@ async function initDatabase() {
             console.error('Error creating other tables:', otherTablesError);
             throw otherTablesError;
         }
-        console.log('✓ Other tables created successfully');
+        ('✓ Other tables created successfully');
         // Create slug functions and triggers
         const { error: functionsError } = await exports.supabase.rpc('execute_sql', {
             sql: `
@@ -228,11 +228,11 @@ async function initDatabase() {
             console.error('Error creating functions:', functionsError);
             throw functionsError;
         }
-        console.log('✓ Functions and triggers created successfully');
-        console.log('\n🎉 Database initialization completed successfully!');
-        console.log('\nNext steps:');
-        console.log('1. Restart your API server: npm run dev');
-        console.log('2. Test the league functionality in your admin panel');
+        ('✓ Functions and triggers created successfully');
+        ('\n🎉 Database initialization completed successfully!');
+        ('\nNext steps:');
+        ('1. Restart your API server: npm run dev');
+        ('2. Test the league functionality in your admin panel');
     }
     catch (error) {
         console.error('Database initialization failed:', error);
@@ -242,7 +242,7 @@ async function initDatabase() {
 // Run initialization if this file is executed directly
 if (require.main === module) {
     initDatabase().then(() => {
-        console.log('Database setup completed');
+        ('Database setup completed');
         process.exit(0);
     }).catch((error) => {
         console.error('Database setup failed:', error);

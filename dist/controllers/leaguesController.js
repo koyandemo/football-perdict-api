@@ -6,7 +6,7 @@ const slugGenerator_1 = require("../utils/slugGenerator");
 // Get all leagues
 const getAllLeagues = async (req, res) => {
     try {
-        console.log('Fetching all leagues from database...');
+        ('Fetching all leagues from database...');
         const { data, error } = await supabase_1.supabase
             .from('leagues')
             .select('*')
@@ -15,7 +15,7 @@ const getAllLeagues = async (req, res) => {
             console.error('Supabase error when fetching leagues:', error);
             throw error;
         }
-        console.log('Successfully fetched leagues:', data?.length || 0);
+        ('Successfully fetched leagues:', data?.length || 0);
         return res.status(200).json({
             success: true,
             data
@@ -35,7 +35,7 @@ exports.getAllLeagues = getAllLeagues;
 const getLeagueById = async (req, res) => {
     try {
         const { id } = req.params;
-        console.log(`Fetching league with ID: ${id}`);
+        (`Fetching league with ID: ${id}`);
         const { data, error } = await supabase_1.supabase
             .from('leagues')
             .select('*')
@@ -46,13 +46,13 @@ const getLeagueById = async (req, res) => {
             throw error;
         }
         if (!data) {
-            console.log(`League with ID ${id} not found`);
+            (`League with ID ${id} not found`);
             return res.status(404).json({
                 success: false,
                 message: 'League not found'
             });
         }
-        console.log(`Successfully fetched league ${id}:`, data);
+        (`Successfully fetched league ${id}:`, data);
         return res.status(200).json({
             success: true,
             data
@@ -72,10 +72,10 @@ exports.getLeagueById = getLeagueById;
 const createLeague = async (req, res) => {
     try {
         const { name, country, logo_url } = req.body;
-        console.log('Creating new league with data:', { name, country, logo_url });
+        ('Creating new league with data:', { name, country, logo_url });
         // Generate slug automatically
         const slug = (0, slugGenerator_1.generateLeagueSlug)(name, country);
-        console.log('Generated slug:', slug);
+        ('Generated slug:', slug);
         const { data, error } = await supabase_1.supabase
             .from('leagues')
             .insert([{ name, country, slug, logo_url }])
@@ -85,7 +85,7 @@ const createLeague = async (req, res) => {
             console.error('Supabase error when creating league:', error);
             throw error;
         }
-        console.log('Successfully created league:', data);
+        ('Successfully created league:', data);
         return res.status(201).json({
             success: true,
             message: 'League created successfully',
@@ -107,10 +107,10 @@ const updateLeague = async (req, res) => {
     try {
         const { id } = req.params;
         const { name, country, logo_url } = req.body;
-        console.log(`Updating league ${id} with data:`, { name, country, logo_url });
+        (`Updating league ${id} with data:`, { name, country, logo_url });
         // Generate slug automatically if name or country is updated
         const slug = (0, slugGenerator_1.generateLeagueSlug)(name, country);
-        console.log(`Generated slug for league ${id}:`, slug);
+        (`Generated slug for league ${id}:`, slug);
         const { data, error } = await supabase_1.supabase
             .from('leagues')
             .update({ name, country, slug, logo_url })
@@ -122,13 +122,13 @@ const updateLeague = async (req, res) => {
             throw error;
         }
         if (!data) {
-            console.log(`League with ID ${id} not found for update`);
+            (`League with ID ${id} not found for update`);
             return res.status(404).json({
                 success: false,
                 message: 'League not found'
             });
         }
-        console.log(`Successfully updated league ${id}:`, data);
+        (`Successfully updated league ${id}:`, data);
         return res.status(200).json({
             success: true,
             message: 'League updated successfully',
@@ -149,7 +149,7 @@ exports.updateLeague = updateLeague;
 const deleteLeague = async (req, res) => {
     try {
         const { id } = req.params;
-        console.log(`Deleting league with ID: ${id}`);
+        (`Deleting league with ID: ${id}`);
         const { error } = await supabase_1.supabase
             .from('leagues')
             .delete()
@@ -158,7 +158,7 @@ const deleteLeague = async (req, res) => {
             console.error(`Supabase error when deleting league ${id}:`, error);
             throw error;
         }
-        console.log(`Successfully deleted league ${id}`);
+        (`Successfully deleted league ${id}`);
         return res.status(200).json({
             success: true,
             message: 'League deleted successfully'
