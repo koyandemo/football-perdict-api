@@ -35,13 +35,13 @@ export interface Match extends BaseEntity {
   league_id: number;
   home_team_id: number;
   away_team_id: number;
-  match_date: string;
-  match_time: string;
+  match_date: string; // ISO 8601 format with timezone
   venue: string;
   status: 'scheduled' | 'live' | 'finished' | 'postponed';
   home_score?: number;
   away_score?: number;
   allow_draw?: boolean;
+  match_timezone?: string; // Timezone identifier (e.g., America/New_York)
 }
 
 // Match Outcome entity

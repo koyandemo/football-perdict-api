@@ -63,19 +63,31 @@ export const getMatchById = catchAsync(async (req: Request, res: Response) => {
 
 // Create a new match
 export const createMatch = catchAsync(async (req: Request, res: Response) => {
-  const { league_id, home_team_id, away_team_id, match_date, match_time, venue, status, allow_draw, home_score, away_score } = req.body;
+  const { league_id, home_team_id, away_team_id, match_date, match_time, venue, status, allow_draw, home_score, away_score, match_timezone } = req.body;
+
+  // Combine date and time into a single ISO 8601 datetime string
+  let combinedDateTime = match_date;
+  if (match_time) {
+    combinedDateTime = `${match_date}T${match_time}`;
+    // If timezone is provided, append it to the datetime
+    if (match_timezone) {
+      combinedDateTime += ` ${match_timezone}`;
+    } else {
+      combinedDateTime += ' UTC'; // Default to UTC if no timezone specified
+    }
+  }
 
   const matchData: Partial<Match> = {
     league_id,
     home_team_id,
     away_team_id,
-    match_date,
-    match_time,
+    match_date: combinedDateTime,
     venue,
     status: status || 'scheduled',
     allow_draw: allow_draw !== undefined ? allow_draw : true,  // Default to true if not provided
     home_score,
-    away_score
+    away_score,
+    match_timezone: match_timezone || 'UTC'
   };
 
   return await baseController.create<Match>(res, container.supabase, 'matches', matchData);
@@ -84,19 +96,31 @@ export const createMatch = catchAsync(async (req: Request, res: Response) => {
 // Update a match
 export const updateMatch = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { league_id, home_team_id, away_team_id, match_date, match_time, venue, status, allow_draw, home_score, away_score } = req.body;
+  const { league_id, home_team_id, away_team_id, match_date, match_time, venue, status, allow_draw, home_score, away_score, match_timezone } = req.body;
+
+  // Combine date and time into a single ISO 8601 datetime string if both are provided
+  let combinedDateTime = match_date;
+  if (match_date && match_time) {
+    combinedDateTime = `${match_date}T${match_time}`;
+    // If timezone is provided, append it to the datetime
+    if (match_timezone) {
+      combinedDateTime += ` ${match_timezone}`;
+    } else {
+      combinedDateTime += ' UTC'; // Default to UTC if no timezone specified
+    }
+  }
 
   const matchData: Partial<Match> = {
     league_id,
     home_team_id,
     away_team_id,
-    match_date,
-    match_time,
+    match_date: combinedDateTime,
     venue,
     status,
     allow_draw,
     home_score,
-    away_score
+    away_score,
+    match_timezone
   };
 
   // Remove undefined fields from matchData to prevent overwriting with undefined values
