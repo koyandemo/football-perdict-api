@@ -14,7 +14,7 @@ BEGIN
   ) THEN
     ALTER TABLE public.comments 
     ADD CONSTRAINT comments_user_id_fkey 
-    FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+    FOREIGN KEY (user_id) REFERENCES public.users(user_id) ON DELETE CASCADE;
   END IF;
 END $$;
 
@@ -22,7 +22,7 @@ END $$;
 CREATE TABLE IF NOT EXISTS public.comment_reactions (
   reaction_id SERIAL PRIMARY KEY,
   comment_id INTEGER REFERENCES public.comments(comment_id) ON DELETE CASCADE,
-  user_id INTEGER REFERENCES public.users(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES public.users(user_id) ON DELETE CASCADE,
   reaction_type VARCHAR(50) DEFAULT 'like', -- 'like', 'dislike', etc.
   timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(comment_id, user_id, reaction_type)

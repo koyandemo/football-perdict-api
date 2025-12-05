@@ -479,16 +479,15 @@ export const getMatchComments = async (req: Request, res: Response) => {
       }
     }
 
-    // Get like counts for each comment and attach user data
+    // Get like and dislike counts for each comment and attach user data
     const formattedComments = await Promise.all(topLevelComments.map(async (comment) => {
       const replyInfo = repliesInfo.find((r: any) => r.parent_comment_id === comment.comment_id);
       
       // Get like count using the new function
       let likeCount = 0;
       try {
-        const { data: rpcLikeCount, error: likeCountError } = await supabase.rpc('count_reactions_for_comment', { 
-          comment_id_param: comment.comment_id, 
-          reaction_type_param: 'like' 
+        const { data: rpcLikeCount, error: likeCountError } = await supabase.rpc('count_likes_for_comment', { 
+          comment_id_param: comment.comment_id
         });
         
         if (likeCountError) {
@@ -502,6 +501,24 @@ export const getMatchComments = async (req: Request, res: Response) => {
         likeCount = 0;
       }
       
+      // Get dislike count using the new function
+      let dislikeCount = 0;
+      try {
+        const { data: rpcDislikeCount, error: dislikeCountError } = await supabase.rpc('count_dislikes_for_comment', { 
+          comment_id_param: comment.comment_id
+        });
+        
+        if (dislikeCountError) {
+          // Handle case where stored procedure doesn't exist
+          dislikeCount = 0;
+        } else {
+          dislikeCount = rpcDislikeCount || 0;
+        }
+      } catch (error) {
+        // Handle case where stored procedure doesn't exist
+        dislikeCount = 0;
+      }
+      
       // If we don't have like count from the stored procedure, count manually
       if (likeCount === 0) {
         try {
@@ -513,6 +530,22 @@ export const getMatchComments = async (req: Request, res: Response) => {
           
           if (!manualCountError && manualLikeCount !== null) {
             likeCount = manualLikeCount;
+          }
+        } catch (manualError) {
+        }
+      }
+      
+      // If we don't have dislike count from the stored procedure, count manually
+      if (dislikeCount === 0) {
+        try {
+          const { count: manualDislikeCount, error: manualCountError } = await supabase
+            .from('comment_reactions')
+            .select('*', { count: 'exact', head: true })
+            .eq('comment_id', comment.comment_id)
+            .eq('reaction_type', 'dislike');
+          
+          if (!manualCountError && manualDislikeCount !== null) {
+            dislikeCount = manualDislikeCount;
           }
         } catch (manualError) {
         }
@@ -540,7 +573,8 @@ export const getMatchComments = async (req: Request, res: Response) => {
         ...comment,
         user: userData,
         reply_count: replyCount,
-        like_count: likeCount || 0
+        like_count: likeCount || 0,
+        dislike_count: dislikeCount || 0
       };
     }));
 
@@ -727,13 +761,69 @@ export const getCommentReplies = async (req: Request, res: Response) => {
       throw error;
     }
 
-    // Format replies with like counts and user data
+    // Format replies with like and dislike counts and user data
     const formattedReplies = await Promise.all(replies.map(async (reply: any) => {
       // Get like count using the new function
-      const { data: likeCount, error: likeCountError } = await supabase.rpc('count_reactions_for_comment', { 
-        comment_id_param: reply.comment_id, 
-        reaction_type_param: 'like' 
-      });
+      let likeCount = 0;
+      try {
+        const { data: rpcLikeCount, error: likeCountError } = await supabase.rpc('count_likes_for_comment', { 
+          comment_id_param: reply.comment_id
+        });
+        
+        if (!likeCountError) {
+          likeCount = rpcLikeCount || 0;
+        }
+      } catch (error) {
+        // Handle case where stored procedure doesn't exist
+        likeCount = 0;
+      }
+      
+      // Get dislike count using the new function
+      let dislikeCount = 0;
+      try {
+        const { data: rpcDislikeCount, error: dislikeCountError } = await supabase.rpc('count_dislikes_for_comment', { 
+          comment_id_param: reply.comment_id
+        });
+        
+        if (!dislikeCountError) {
+          dislikeCount = rpcDislikeCount || 0;
+        }
+      } catch (error) {
+        // Handle case where stored procedure doesn't exist
+        dislikeCount = 0;
+      }
+      
+      // If we don't have like count from the stored procedure, count manually
+      if (likeCount === 0) {
+        try {
+          const { count: manualLikeCount, error: manualCountError } = await supabase
+            .from('comment_reactions')
+            .select('*', { count: 'exact', head: true })
+            .eq('comment_id', reply.comment_id)
+            .eq('reaction_type', 'like');
+          
+          if (!manualCountError && manualLikeCount !== null) {
+            likeCount = manualLikeCount;
+          }
+        } catch (manualError) {
+        }
+      }
+      
+      // If we don't have dislike count from the stored procedure, count manually
+      if (dislikeCount === 0) {
+        try {
+          const { count: manualDislikeCount, error: manualCountError } = await supabase
+            .from('comment_reactions')
+            .select('*', { count: 'exact', head: true })
+            .eq('comment_id', reply.comment_id)
+            .eq('reaction_type', 'dislike');
+          
+          if (!manualCountError && manualDislikeCount !== null) {
+            dislikeCount = manualDislikeCount;
+          }
+        } catch (manualError) {
+        }
+      }
       
       // Fetch user data for the reply
       let userData = null;
@@ -755,7 +845,8 @@ export const getCommentReplies = async (req: Request, res: Response) => {
       return {
         ...reply,
         user: userData,
-        like_count: likeCountError ? 0 : likeCount || 0
+        like_count: likeCount || 0,
+        dislike_count: dislikeCount || 0
       };
     }));
 
