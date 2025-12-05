@@ -27,6 +27,7 @@ export interface Team extends BaseEntity {
   short_code: string;
   logo_url?: string;
   country: string;
+  team_type?: 'club' | 'country';
 }
 
 // Match entity
@@ -35,13 +36,18 @@ export interface Match extends BaseEntity {
   league_id: number;
   home_team_id: number;
   away_team_id: number;
-  match_date: string; // ISO 8601 format with timezone
+  match_date: string; // Date part of the match datetime
+  match_time?: string; // Time part of the match datetime
   venue: string;
   status: 'scheduled' | 'live' | 'finished' | 'postponed';
   home_score?: number;
   away_score?: number;
   allow_draw?: boolean;
   match_timezone?: string; // Timezone identifier (e.g., America/New_York)
+  big_match?: boolean;
+  derby?: boolean;
+  match_type?: 'Normal' | 'Final' | 'Semi-Final' | 'Quarter-Final';
+  published?: boolean;
 }
 
 // Match Outcome entity
@@ -63,6 +69,15 @@ export interface MatchVoteCount extends BaseEntity {
   total_votes: number;
 }
 
+// User Prediction entity
+export interface UserPrediction extends BaseEntity {
+  prediction_id?: number;
+  user_id: number;
+  match_id: number;
+  predicted_winner: string;
+  user_type?: 'user' | 'admin'; // New field to distinguish between user and admin votes
+}
+
 // Score Prediction entity
 export interface ScorePrediction extends BaseEntity {
   score_pred_id?: number;
@@ -70,6 +85,7 @@ export interface ScorePrediction extends BaseEntity {
   home_score: number;
   away_score: number;
   vote_count: number;
+  user_type?: 'user' | 'admin'; // New field to distinguish between user and admin votes
 }
 
 // User entity

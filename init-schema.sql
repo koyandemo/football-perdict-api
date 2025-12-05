@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS public.user_predictions (
   user_id INTEGER,
   match_id INTEGER REFERENCES public.matches(match_id) ON DELETE CASCADE,
   predicted_winner VARCHAR(50),
-  prediction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  prediction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  user_type VARCHAR(10) DEFAULT 'user' CHECK (user_type IN ('user', 'admin'))
 );
 
 -- Create Score Predictions table
@@ -59,7 +60,8 @@ CREATE TABLE IF NOT EXISTS public.score_predictions (
   match_id INTEGER REFERENCES public.matches(match_id) ON DELETE CASCADE,
   home_score INTEGER,
   away_score INTEGER,
-  vote_count INTEGER DEFAULT 0
+  vote_count INTEGER DEFAULT 0,
+  user_type VARCHAR(10) DEFAULT 'user' CHECK (user_type IN ('user', 'admin'))
 );
 
 -- Create Comments table

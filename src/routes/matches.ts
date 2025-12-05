@@ -14,6 +14,7 @@ import {
   deleteMatch
 } from '../controllers/matchesController';
 import { validateMatch } from '../middleware/validation';
+import { authenticate } from '../controllers/userController';
 
 const router = Router();
 
@@ -462,7 +463,7 @@ router.get('/:id/predictions', getScorePredictions);
  *       500:
  *         $ref: '#/components/responses/ServerError'
  * */
-router.post('/:id/predictions', voteScorePrediction);
+router.post('/:id/predictions', authenticate, voteScorePrediction);
 
 /**
  * @swagger

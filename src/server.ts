@@ -33,7 +33,10 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  credentials: true
+}));
 app.use(morgan('combined'));
 app.use(express.json());
 
@@ -70,6 +73,7 @@ app.use(errorHandler);
 
 // Start server
 app.listen(PORT, () => {
+  console.log(`Football Prediction API server is running on port ${PORT}`);
 });
 
 export default app;

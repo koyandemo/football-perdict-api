@@ -8,6 +8,9 @@ import {
   updateUserProfile
 } from '../services/userService';
 
+// Export the authenticateUser function so it can be imported by other modules
+export { authenticateUser };
+
 /**
  * Register a new user
  */
@@ -71,7 +74,15 @@ export async function login(req: Request, res: Response) {
       return res.status(401).json(result);
     }
 
-    return res.status(200).json(result);
+    // Wrap the response in a data object to match frontend expectations
+    return res.status(200).json({
+      success: true,
+      message: result.message,
+      data: {
+        token: result.token,
+        user: result.user
+      }
+    });
   } catch (error: any) {
     console.error('Login error:', error);
     return res.status(500).json({

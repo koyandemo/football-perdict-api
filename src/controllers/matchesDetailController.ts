@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { supabase } from '../config/supabase';
+import { updateMatchVoteCountsFromScorePredictions } from './predictionsController';
 
 // Get match outcomes
 export const getMatchOutcomes = async (req: Request, res: Response) => {
@@ -251,6 +252,19 @@ export const voteScorePrediction = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { home_score, away_score } = req.body;
+    
+    // Extract user_type from authenticated user
+    const userType = (req as any).user?.type || 'user';
+    console.log('User type from token:', (req as any).user?.type);
+
+    // Validate user_type value
+    const validUserTypes = ['user', 'admin'];
+    if (!validUserTypes.includes(userType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user_type value. Must be one of: user, admin'
+      });
+    }
 
     // Check if this score prediction already exists
     const { data: existingPrediction, error: fetchError } = await supabase
@@ -270,7 +284,10 @@ export const voteScorePrediction = async (req: Request, res: Response) => {
       // Update existing prediction vote count
       const { data, error } = await supabase
         .from('score_predictions')
-        .update({ vote_count: existingPrediction.vote_count + 1 })
+        .update({ 
+          vote_count: existingPrediction.vote_count + 1,
+          user_type: userType // Preserve the user_type when updating
+        })
         .eq('score_pred_id', existingPrediction.score_pred_id)
         .select()
         .single();
@@ -285,13 +302,22 @@ export const voteScorePrediction = async (req: Request, res: Response) => {
           match_id: parseInt(id),
           home_score,
           away_score,
-          vote_count: 1
+          vote_count: 1,
+          user_type: userType
         }])
         .select()
         .single();
 
       if (error) throw error;
       result = data;
+    }
+
+    // Update match vote counts based on score predictions
+    try {
+      await updateMatchVoteCountsFromScorePredictions(parseInt(id));
+    } catch (voteCountError) {
+      console.error('Failed to update vote counts:', voteCountError);
+      // Don't fail the whole request if vote count update fails
     }
 
     return res.status(200).json({
@@ -313,7 +339,16 @@ export const voteScorePrediction = async (req: Request, res: Response) => {
 export const updateScorePredictionVoteCount = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { score_pred_id, home_score, away_score, vote_count } = req.body;
+    const { score_pred_id, home_score, away_score, vote_count, user_type = 'user' } = req.body;
+
+    // Validate user_type value
+    const validUserTypes = ['user', 'admin'];
+    if (!validUserTypes.includes(user_type)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid user_type value. Must be one of: user, admin'
+      });
+    }
 
     let result;
     
@@ -324,7 +359,8 @@ export const updateScorePredictionVoteCount = async (req: Request, res: Response
         .update({ 
           home_score: home_score,
           away_score: away_score,
-          vote_count: vote_count 
+          vote_count: vote_count,
+          user_type: user_type
         })
         .eq('score_pred_id', score_pred_id)
         .select()
@@ -353,7 +389,8 @@ export const updateScorePredictionVoteCount = async (req: Request, res: Response
           .update({ 
             home_score: home_score,
             away_score: away_score,
-            vote_count: vote_count 
+            vote_count: vote_count,
+            user_type: user_type
           })
           .eq('score_pred_id', existingPrediction.score_pred_id)
           .select()
@@ -369,7 +406,8 @@ export const updateScorePredictionVoteCount = async (req: Request, res: Response
             match_id: parseInt(id),
             home_score,
             away_score,
-            vote_count
+            vote_count,
+            user_type
           }])
           .select()
           .single();

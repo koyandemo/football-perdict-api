@@ -76,6 +76,7 @@ export async function initDatabase() {
           short_code VARCHAR(10) NOT NULL,
           logo_url VARCHAR(500),
           country VARCHAR(255) NOT NULL,
+          team_type VARCHAR(20) DEFAULT 'club' CHECK (team_type IN ('club', 'country')),
           slug VARCHAR UNIQUE
         );
         
@@ -114,7 +115,11 @@ export async function initDatabase() {
           venue VARCHAR(255),
           status VARCHAR(50) DEFAULT 'Upcoming',
           slug VARCHAR UNIQUE,
-          allow_draw BOOLEAN DEFAULT true
+          allow_draw BOOLEAN DEFAULT true,
+          big_match BOOLEAN DEFAULT false,
+          derby BOOLEAN DEFAULT false,
+          match_type VARCHAR(20) DEFAULT 'Normal' CHECK (match_type IN ('Normal', 'Final', 'Semi-Final', 'Quarter-Final')),
+          published BOOLEAN DEFAULT false
         );
         
         ALTER TABLE public.matches ENABLE ROW LEVEL SECURITY;
@@ -156,7 +161,8 @@ export async function initDatabase() {
           user_id INTEGER,
           match_id INTEGER REFERENCES public.matches(match_id) ON DELETE CASCADE,
           predicted_winner VARCHAR(50),
-          prediction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          prediction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          user_type VARCHAR(10) DEFAULT 'user' CHECK (user_type IN ('user', 'admin'))
         );
         
         CREATE TABLE IF NOT EXISTS public.score_predictions (
@@ -164,7 +170,8 @@ export async function initDatabase() {
           match_id INTEGER REFERENCES public.matches(match_id) ON DELETE CASCADE,
           home_score INTEGER,
           away_score INTEGER,
-          vote_count INTEGER DEFAULT 0
+          vote_count INTEGER DEFAULT 0,
+          user_type VARCHAR(10) DEFAULT 'user' CHECK (user_type IN ('user', 'admin'))
         );
         
         CREATE TABLE IF NOT EXISTS public.comments (

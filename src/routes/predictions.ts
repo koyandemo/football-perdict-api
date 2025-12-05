@@ -16,6 +16,7 @@ import {
   voteScorePrediction
 } from '../controllers/predictionsController';
 import { validatePrediction } from '../middleware/validation';
+import { authenticate } from '../controllers/userController';
 
 const router = Router();
 
@@ -95,6 +96,8 @@ router.get('/:id', getPredictionById);
  *   post:
  *     summary: Create a new user prediction
  *     tags: [Predictions]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -137,7 +140,7 @@ router.get('/:id', getPredictionById);
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.post('/', validatePrediction, createPrediction);
+router.post('/', authenticate, validatePrediction, createPrediction);
 
 /**
  * @swagger
@@ -145,6 +148,8 @@ router.post('/', validatePrediction, createPrediction);
  *   put:
  *     summary: Update a user prediction
  *     tags: [Predictions]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -188,7 +193,7 @@ router.post('/', validatePrediction, createPrediction);
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.put('/:id', updatePrediction);
+router.put('/:id', authenticate, updatePrediction);
 
 /**
  * @swagger
@@ -196,6 +201,8 @@ router.put('/:id', updatePrediction);
  *   delete:
  *     summary: Delete a user prediction
  *     tags: [Predictions]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -222,86 +229,6 @@ router.put('/:id', updatePrediction);
  *       500:
  *         $ref: '#/components/responses/ServerError'
  */
-router.delete('/:id', deletePrediction);
-
-/**
- * @swagger
- * /api/predictions/score/{match_id}:
- *   get:
- *     summary: Get score predictions for a match
- *     tags: [Predictions]
- *     parameters:
- *       - in: path
- *         name: match_id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Match ID
- *     responses:
- *       200:
- *         description: List of score predictions for the match
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/ScorePrediction'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.get('/score/:match_id', getScorePredictions);
-
-/**
- * @swagger
- * /api/predictions/score:
- *   post:
- *     summary: Vote on a score prediction
- *     tags: [Predictions]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - match_id
- *               - home_score
- *               - away_score
- *             properties:
- *               match_id:
- *                 type: integer
- *                 example: 456
- *               home_score:
- *                 type: integer
- *                 example: 2
- *               away_score:
- *                 type: integer
- *                 example: 1
- *     responses:
- *       200:
- *         description: Score prediction voted successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: "Score prediction voted successfully"
- *                 data:
- *                   $ref: '#/components/schemas/ScorePrediction'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- */
-router.post('/score', voteScorePrediction);
+router.delete('/:id', authenticate, deletePrediction);
 
 export default router;

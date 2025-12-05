@@ -60,6 +60,11 @@ const options: swaggerJsdoc.Options = {
               type: 'string',
               description: 'Country of the team',
             },
+            team_type: {
+              type: 'string',
+              enum: ['club', 'country'],
+              description: 'Type of team: club or country (national team)',
+            },
             slug: {
               type: 'string',
               description: 'URL-friendly slug for the team',
@@ -110,6 +115,23 @@ const options: swaggerJsdoc.Options = {
             allow_draw: {
               type: 'boolean',
               description: 'Whether the match allows draw predictions',
+            },
+            big_match: {
+              type: 'boolean',
+              description: 'Indicates if this is a big or important match',
+            },
+            derby: {
+              type: 'boolean',
+              description: 'Indicates if this is a rivalry match',
+            },
+            match_type: {
+              type: 'string',
+              enum: ['Normal', 'Final', 'Semi-Final', 'Quarter-Final'],
+              description: 'Type of match',
+            },
+            published: {
+              type: 'boolean',
+              description: 'Indicates if the match is published and visible to users',
             },
           },
         },

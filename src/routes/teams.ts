@@ -105,6 +105,10 @@ router.get('/:id', getTeamById);
  *               country:
  *                 type: string
  *                 example: "England"
+ *               team_type:
+ *                 type: string
+ *                 enum: [club, country]
+ *                 example: "club"
  *     responses:
  *       201:
  *         description: Team created successfully
@@ -160,6 +164,10 @@ router.post('/', validateTeam, createTeam);
  *               country:
  *                 type: string
  *                 example: "England"
+ *               team_type:
+ *                 type: string
+ *                 enum: [club, country]
+ *                 example: "club"
  *     responses:
  *       200:
  *         description: Team updated successfully

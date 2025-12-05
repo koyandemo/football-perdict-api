@@ -20,13 +20,14 @@ export const getTeamById = catchAsync(async (req: Request, res: Response) => {
 
 // Create a new team
 export const createTeam = catchAsync(async (req: Request, res: Response) => {
-  const { name, short_code, logo_url, country } = req.body;
+  const { name, short_code, logo_url, country, team_type } = req.body;
 
   const teamData: Partial<Team> = {
     name,
     short_code,
     logo_url,
-    country
+    country,
+    team_type
   };
 
   return await baseController.create<Team>(res, container.supabase, 'teams', teamData);
@@ -35,13 +36,14 @@ export const createTeam = catchAsync(async (req: Request, res: Response) => {
 // Update a team
 export const updateTeam = catchAsync(async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { name, short_code, logo_url, country } = req.body;
+  const { name, short_code, logo_url, country, team_type } = req.body;
 
   const teamData: Partial<Team> = {
     name,
     short_code,
     logo_url,
-    country
+    country,
+    team_type
   };
 
   return await baseController.update<Team>(res, container.supabase, 'teams', id, teamData, 'team_id');
