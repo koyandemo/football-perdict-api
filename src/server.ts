@@ -73,7 +73,7 @@ app.use(errorHandler);
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`Football Prediction API server is running on port ${PORT}`);
+  // Server is running on port ${PORT}
 });
 
 export default app;

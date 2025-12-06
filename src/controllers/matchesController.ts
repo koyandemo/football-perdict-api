@@ -69,7 +69,7 @@ export const createMatch = catchAsync(async (req: Request, res: Response) => {
   const match_timezone = req.body.match_timezone;
 
   // Log the incoming request body for debugging
-  console.log('Create match request body:', req.body);
+
 
   // Combine date and time into a single string
   let combinedDateTime = match_date;
@@ -102,7 +102,7 @@ export const createMatch = catchAsync(async (req: Request, res: Response) => {
   }
 
   // Log the constructed matchData for debugging
-  console.log('Constructed matchData for create:', matchData);
+
 
   return await baseController.create<Match>(res, container.supabase, 'matches', matchData);
 });
@@ -116,7 +116,7 @@ export const updateMatch = catchAsync(async (req: Request, res: Response) => {
   const match_timezone = req.body.match_timezone;
 
   // Log the incoming request body for debugging
-  console.log('Update match request body:', req.body);
+
 
   // Combine date and time into a single string
   let combinedDateTime = match_date;
@@ -149,19 +149,19 @@ export const updateMatch = catchAsync(async (req: Request, res: Response) => {
   }
 
   // Log the constructed matchData for debugging
-  console.log('Constructed matchData:', matchData);
+
 
   // Remove undefined fields from matchData to prevent overwriting with undefined values
   // Note: We preserve falsy values like false and null as they are valid field values
   Object.keys(matchData).forEach(key => {
     if (matchData[key as keyof Partial<Match>] === undefined) {
-      console.log(`Removing undefined field: ${key}`);
+
       delete matchData[key as keyof Partial<Match>];
     }
   });
 
   // Log the final matchData after field removal
-  console.log('Final matchData after field removal:', matchData);
+
 
   return await baseController.update<Match>(res, container.supabase, 'matches', id, matchData, 'match_id');
 });

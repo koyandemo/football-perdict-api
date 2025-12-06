@@ -255,7 +255,7 @@ export const voteScorePrediction = async (req: Request, res: Response) => {
     
     // Extract user_type from authenticated user
     const userType = (req as any).user?.type || 'user';
-    console.log('User type from token:', (req as any).user?.type);
+
 
     // Validate user_type value
     const validUserTypes = ['user', 'admin'];
@@ -273,9 +273,9 @@ export const voteScorePrediction = async (req: Request, res: Response) => {
       .eq('match_id', id)
       .eq('home_score', home_score)
       .eq('away_score', away_score)
-      .single();
+      .maybeSingle();
 
-    if (fetchError && fetchError.code !== 'PGRST116') {
+    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows returned
       throw fetchError;
     }
 
@@ -292,7 +292,10 @@ export const voteScorePrediction = async (req: Request, res: Response) => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
+
       result = data;
     } else {
       // Create new score prediction
@@ -308,7 +311,10 @@ export const voteScorePrediction = async (req: Request, res: Response) => {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
+
       result = data;
     }
 
