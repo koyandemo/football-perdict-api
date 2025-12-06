@@ -279,106 +279,19 @@ router.delete('/:id', deleteMatch);
 
 // Import match detail controllers
 import {
-  getMatchOutcomes,
-  updateMatchOutcomes,
   getMatchVoteCounts,
   updateMatchVoteCounts,
+  updateAdminMatchVoteCounts,
   getScorePredictions,
   voteScorePrediction,
   updateScorePredictionVoteCount,
+  updateAdminScorePredictionVoteCount,
   getMatchComments,
   createMatchComment,
   getCommentReplies,
   addCommentReaction,
   deleteMatchComment
 } from '../controllers/matchesDetailController';
-
-/**
- * @swagger
- * /api/matches/{id}/outcomes:
- *   get:
- *     summary: Get match outcomes
- *     tags: [Matches]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Match ID
- *     responses:
- *       200:
- *         description: Match outcomes data
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   $ref: '#/components/schemas/MatchOutcome'
- *       404:
- *         $ref: '#/components/responses/NotFoundError'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- * */
-router.get('/:id/outcomes', getMatchOutcomes);
-
-/**
- * @swagger
- * /api/matches/{id}/outcomes:
- *   post:
- *     summary: Update match outcomes
- *     tags: [Matches]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: integer
- *         description: Match ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               home_win_prob:
- *                 type: integer
- *                 example: 45
- *               draw_prob:
- *                 type: integer
- *                 example: 20
- *               away_win_prob:
- *                 type: integer
- *                 example: 35
- *     responses:
- *       200:
- *         description: Match outcomes updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: "Match outcomes updated successfully"
- *                 data:
- *                   $ref: '#/components/schemas/MatchOutcome'
- *       400:
- *         $ref: '#/components/responses/ValidationError'
- *       404:
- *         $ref: '#/components/responses/NotFoundError'
- *       500:
- *         $ref: '#/components/responses/ServerError'
- * */
-router.post('/:id/outcomes', updateMatchOutcomes);
 
 /**
  * @swagger
@@ -524,6 +437,64 @@ router.post('/:id/predictions', authenticate, voteScorePrediction);
  *         $ref: '#/components/responses/ServerError'
  * */
 router.post('/:id/predictions/vote-count', updateScorePredictionVoteCount);
+
+/**
+ * @swagger
+ * /api/matches/{id}/predictions/admin-vote-count:
+ *   post:
+ *     summary: Update admin score prediction with specific values and vote count
+ *     tags: [Matches]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Match ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - home_score
+ *               - away_score
+ *               - vote_count
+ *             properties:
+ *               score_pred_id:
+ *                 type: integer
+ *                 description: ID of the score prediction to update (optional, if not provided, will match by scores)
+ *                 example: 123
+ *               home_score:
+ *                 type: integer
+ *                 example: 2
+ *               away_score:
+ *                 type: integer
+ *                 example: 1
+ *               vote_count:
+ *                 type: integer
+ *                 example: 5000
+ *     responses:
+ *       200:
+ *         description: Admin score prediction updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Admin score prediction updated successfully"
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ * */
+router.post('/:id/predictions/admin-vote-count', updateAdminScorePredictionVoteCount);
 
 /**
  * @swagger
@@ -718,6 +689,56 @@ router.get('/:id/vote-counts', getMatchVoteCounts);
  *         $ref: '#/components/responses/ServerError'
  * */
 router.post('/:id/vote-counts', updateMatchVoteCounts);
+
+/**
+ * @swagger
+ * /api/matches/{id}/admin-vote-counts:
+ *   post:
+ *     summary: Update admin vote counts
+ *     tags: [Matches]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *         description: Match ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               home_votes:
+ *                 type: integer
+ *                 example: 3000
+ *               draw_votes:
+ *                 type: integer
+ *                 example: 1000
+ *               away_votes:
+ *                 type: integer
+ *                 example: 1000
+ *     responses:
+ *       200:
+ *         description: Admin vote counts updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "Admin vote counts updated successfully"
+ *       400:
+ *         $ref: '#/components/responses/ValidationError'
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ * */
+router.post('/:id/admin-vote-counts', updateAdminMatchVoteCounts);
 
 /**
  * @swagger

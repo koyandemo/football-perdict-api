@@ -40,6 +40,14 @@ app.use(cors({
 app.use(morgan('combined'));
 app.use(express.json());
 
+// Disable caching for all API routes to ensure fresh data
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
+
 // Routes
 app.use('/api/leagues', leagueRoutes);
 app.use('/api/teams', teamRoutes);

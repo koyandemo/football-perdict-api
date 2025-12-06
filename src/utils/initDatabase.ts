@@ -147,15 +147,6 @@ export async function initDatabase() {
     // Create other necessary tables (simplified)
     const { error: otherTablesError } = await supabase.rpc('execute_sql', {
       sql: `
-        CREATE TABLE IF NOT EXISTS public.match_outcomes (
-          outcome_id SERIAL PRIMARY KEY,
-          match_id INTEGER REFERENCES public.matches(match_id) ON DELETE CASCADE,
-          home_win_prob INTEGER CHECK (home_win_prob >= 0 AND home_win_prob <= 100),
-          draw_prob INTEGER CHECK (draw_prob >= 0 AND draw_prob <= 100),
-          away_win_prob INTEGER CHECK (away_win_prob >= 0 AND away_win_prob <= 100),
-          CONSTRAINT unique_match_outcome UNIQUE (match_id)
-        );
-        
         CREATE TABLE IF NOT EXISTS public.user_predictions (
           prediction_id SERIAL PRIMARY KEY,
           user_id INTEGER,
@@ -170,8 +161,7 @@ export async function initDatabase() {
           match_id INTEGER REFERENCES public.matches(match_id) ON DELETE CASCADE,
           home_score INTEGER,
           away_score INTEGER,
-          vote_count INTEGER DEFAULT 0,
-          user_type VARCHAR(10) DEFAULT 'user' CHECK (user_type IN ('user', 'admin'))
+          vote_count INTEGER DEFAULT 0
         );
         
         CREATE TABLE IF NOT EXISTS public.comments (
@@ -183,7 +173,6 @@ export async function initDatabase() {
         );
         
         -- Enable RLS on all tables
-        ALTER TABLE public.match_outcomes ENABLE ROW LEVEL SECURITY;
         ALTER TABLE public.user_predictions ENABLE ROW LEVEL SECURITY;
         ALTER TABLE public.score_predictions ENABLE ROW LEVEL SECURITY;
         ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;

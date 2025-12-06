@@ -9,7 +9,8 @@ import {
   createAdminMatchVote,
   getAllAdminVotes,
   runFinalMigration,
-  cleanupDuplicateAdminVotes
+  cleanupDuplicateAdminVotes,
+  removeAllVotes
 } from '../controllers/predictionsController';
 import { validatePrediction } from '../middleware/validation';
 import { authenticate } from '../controllers/userController';
@@ -408,5 +409,30 @@ router.post('/run-final-migration', runFinalMigration);
  *         $ref: '#/components/responses/ServerError'
  */
 router.post('/cleanup-duplicate-admin-votes', cleanupDuplicateAdminVotes);
+
+/**
+ * @swagger
+ * /api/predictions/remove-all-votes:
+ *   delete:
+ *     summary: Remove all voting and score prediction votes
+ *     tags: [Predictions]
+ *     responses:
+ *       200:
+ *         description: All votes removed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: "All votes and score predictions have been removed successfully"
+ *       500:
+ *         $ref: '#/components/responses/ServerError'
+ */
+router.delete('/remove-all-votes', removeAllVotes);
 
 export default router;

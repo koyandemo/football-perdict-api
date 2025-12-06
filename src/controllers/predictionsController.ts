@@ -338,14 +338,24 @@ export const updateMatchVoteCountsFromPredictions = async (match_id: number) => 
 // Helper function to update match vote counts based on score predictions
 export const updateMatchVoteCountsFromScorePredictions = async (match_id: number) => {
   try {
-    // Get all score predictions for this match
-    const { data: scorePredictions, error: fetchPredictionsError } = await supabase
+    // Get user score predictions from score_predictions table
+    const { data: userScorePredictions, error: fetchUserPredictionsError } = await supabase
       .from('score_predictions')
-      .select('home_score, away_score, vote_count, user_type')
+      .select('home_score, away_score, vote_count')
       .eq('match_id', match_id);
 
-    if (fetchPredictionsError) {
-      throw fetchPredictionsError;
+    if (fetchUserPredictionsError) {
+      throw fetchUserPredictionsError;
+    }
+
+    // Get admin score predictions from admin_score_predictions table
+    const { data: adminScorePredictions, error: fetchAdminPredictionsError } = await supabase
+      .from('admin_score_predictions')
+      .select('home_score, away_score, vote_count')
+      .eq('match_id', match_id);
+
+    if (fetchAdminPredictionsError) {
+      throw fetchAdminPredictionsError;
     }
 
     // Count admin votes (baseline set through admin predictions)
@@ -353,46 +363,44 @@ export const updateMatchVoteCountsFromScorePredictions = async (match_id: number
     let admin_draw_votes = 0;
     let admin_away_votes = 0;
 
-    // Count admin votes only
-    scorePredictions
-      .filter(p => p.user_type === 'admin')
-      .forEach(prediction => {
-        const predictedWinner = getPredictedWinner(prediction.home_score, prediction.away_score);
-        switch (predictedWinner) {
-          case 'Home':
-            admin_home_votes += prediction.vote_count;
-            break;
-          case 'Draw':
-            admin_draw_votes += prediction.vote_count;
-            break;
-          case 'Away':
-            admin_away_votes += prediction.vote_count;
-            break;
-        }
-      });
+    // Count admin votes from admin_score_predictions table
+    (adminScorePredictions || []).forEach(prediction => {
+      const predictedWinner = getPredictedWinner(prediction.home_score, prediction.away_score);
+      const voteCount = prediction.vote_count || 0;
+      switch (predictedWinner) {
+        case 'Home':
+          admin_home_votes += voteCount;
+          break;
+        case 'Draw':
+          admin_draw_votes += voteCount;
+          break;
+        case 'Away':
+          admin_away_votes += voteCount;
+          break;
+      }
+    });
 
     // Count user votes
     let user_home_votes = 0;
     let user_draw_votes = 0;
     let user_away_votes = 0;
 
-    // Count user votes only
-    scorePredictions
-      .filter(p => p.user_type === 'user')
-      .forEach(prediction => {
-        const predictedWinner = getPredictedWinner(prediction.home_score, prediction.away_score);
-        switch (predictedWinner) {
-          case 'Home':
-            user_home_votes += prediction.vote_count;
-            break;
-          case 'Draw':
-            user_draw_votes += prediction.vote_count;
-            break;
-          case 'Away':
-            user_away_votes += prediction.vote_count;
-            break;
-        }
-      });
+    // Count user votes from score_predictions table
+    (userScorePredictions || []).forEach(prediction => {
+      const predictedWinner = getPredictedWinner(prediction.home_score, prediction.away_score);
+      const voteCount = prediction.vote_count || 0;
+      switch (predictedWinner) {
+        case 'Home':
+          user_home_votes += voteCount;
+          break;
+        case 'Draw':
+          user_draw_votes += voteCount;
+          break;
+        case 'Away':
+          user_away_votes += voteCount;
+          break;
+      }
+    });
 
     // The displayed votes should be the sum of admin votes (baseline) + user votes
     const total_home_votes = admin_home_votes + user_home_votes;
@@ -883,6 +891,68 @@ export const cleanupDuplicateAdminVotes = async (req: Request, res: Response) =>
     return res.status(500).json({
       success: false,
       message: 'Failed to cleanup duplicate admin votes',
+      error: error.message
+    });
+  }
+};
+
+// Remove all voting and score prediction votes from the database
+export const removeAllVotes = async (req: Request, res: Response) => {
+  try {
+    // 1. Delete all user predictions
+    const { error: userPredError } = await supabase
+      .from('user_predictions')
+      .delete()
+      .neq('prediction_id', 0); // Delete all rows
+
+    if (userPredError) {
+      throw new Error(`Failed to delete user_predictions: ${userPredError.message}`);
+    }
+
+    // 2. Delete all admin match votes
+    const { error: adminVotesError } = await supabase
+      .from('admin_match_votes')
+      .delete()
+      .neq('vote_id', 0); // Delete all rows
+
+    if (adminVotesError) {
+      throw new Error(`Failed to delete admin_match_votes: ${adminVotesError.message}`);
+    }
+
+    // 3. Delete all score predictions
+    const { error: scorePredError } = await supabase
+      .from('score_predictions')
+      .delete()
+      .neq('score_pred_id', 0); // Delete all rows
+
+    if (scorePredError) {
+      throw new Error(`Failed to delete score_predictions: ${scorePredError.message}`);
+    }
+
+    // 4. Reset all match vote counts to zero
+    const { error: voteCountsError } = await supabase
+      .from('match_vote_counts')
+      .update({
+        home_votes: 0,
+        draw_votes: 0,
+        away_votes: 0,
+        total_votes: 0
+      })
+      .neq('vote_id', 0); // Update all rows
+
+    if (voteCountsError) {
+      throw new Error(`Failed to reset match_vote_counts: ${voteCountsError.message}`);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'All votes and score predictions have been removed successfully'
+    });
+  } catch (error: any) {
+    console.error('Error removing all votes:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to remove all votes',
       error: error.message
     });
   }

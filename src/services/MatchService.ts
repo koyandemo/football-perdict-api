@@ -72,8 +72,7 @@ export class MatchService extends BaseService {
           *,
           home_team:teams!matches_home_team_id_fkey(name, short_code, logo_url),
           away_team:teams!matches_away_team_id_fkey(name, short_code, logo_url),
-          league:leagues!matches_league_id_fkey(name, country),
-          match_outcomes(*)
+          league:leagues!matches_league_id_fkey(name, country)
         `
         )
         .eq("match_id", id)

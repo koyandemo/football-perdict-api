@@ -2,143 +2,97 @@ import { Request, Response } from 'express';
 import { supabase } from '../config/supabase';
 import { updateMatchVoteCountsFromScorePredictions } from './predictionsController';
 
-// Get match outcomes
-export const getMatchOutcomes = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-
-    const { data, error } = await supabase
-      .from('match_outcomes')
-      .select('*')
-      .eq('match_id', id)
-      .single();
-
-    if (error) {
-      // If no outcomes found, return default values
-      if (error.code === 'PGRST116') {
-        return res.status(200).json({
-          success: true,
-          data: {
-            match_id: parseInt(id),
-            home_win_prob: 0,
-            draw_prob: 0,
-            away_win_prob: 0
-          }
-        });
-      }
-      throw error;
-    }
-
-    return res.status(200).json({
-      success: true,
-      data
-    });
-  } catch (error: any) {
-    console.error('Error fetching match outcomes:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to fetch match outcomes',
-      error: error.message
-    });
-  }
-};
-
-// Update match outcomes
-export const updateMatchOutcomes = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { home_win_prob, draw_prob, away_win_prob } = req.body;
-
-    // Check if outcomes already exist for this match
-    const { data: existingOutcomes, error: fetchError } = await supabase
-      .from('match_outcomes')
-      .select('outcome_id')
-      .eq('match_id', id)
-      .single();
-
-    let result;
-    if (fetchError && fetchError.code !== 'PGRST116') {
-      throw fetchError;
-    }
-
-    if (existingOutcomes) {
-      // Update existing outcomes
-      const { data, error } = await supabase
-        .from('match_outcomes')
-        .update({
-          home_win_prob,
-          draw_prob,
-          away_win_prob
-        })
-        .eq('match_id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      result = data;
-    } else {
-      // Create new outcomes
-      const { data, error } = await supabase
-        .from('match_outcomes')
-        .insert([{
-          match_id: parseInt(id),
-          home_win_prob,
-          draw_prob,
-          away_win_prob
-        }])
-        .select()
-        .single();
-
-      if (error) throw error;
-      result = data;
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: 'Match outcomes updated successfully',
-      data: result
-    });
-  } catch (error: any) {
-    console.error('Error updating match outcomes:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to update match outcomes',
-      error: error.message
-    });
-  }
-};
-
-// Get match vote counts (actual vote counts)
+// Get match vote counts (combines user and admin votes) with calculated percentages
 export const getMatchVoteCounts = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const { data, error } = await supabase
+    // Fetch user vote counts
+    const { data: userVotes, error: userError } = await supabase
       .from('match_vote_counts')
       .select('*')
       .eq('match_id', id)
-      .single();
+      .maybeSingle();
 
-    if (error) {
-      // If no vote counts found, return default values
-      if (error.code === 'PGRST116') {
-        return res.status(200).json({
-          success: true,
-          data: {
-            match_id: parseInt(id),
-            home_votes: 0,
-            draw_votes: 0,
-            away_votes: 0,
-            total_votes: 0
-          }
-        });
+    // Fetch admin vote counts
+    const { data: adminVotes, error: adminError } = await supabase
+      .from('admin_match_vote_counts')
+      .select('*')
+      .eq('match_id', id)
+      .maybeSingle();
+
+    // Initialize vote counts
+    const user_home_votes = userVotes?.home_votes || 0;
+    const user_draw_votes = userVotes?.draw_votes || 0;
+    const user_away_votes = userVotes?.away_votes || 0;
+
+    const admin_home_votes = adminVotes?.home_votes || 0;
+    const admin_draw_votes = adminVotes?.draw_votes || 0;
+    const admin_away_votes = adminVotes?.away_votes || 0;
+
+    // Combine user and admin votes
+    const home_votes = user_home_votes + admin_home_votes;
+    const draw_votes = user_draw_votes + admin_draw_votes;
+    const away_votes = user_away_votes + admin_away_votes;
+    const total_votes = home_votes + draw_votes + away_votes;
+
+    // Calculate percentages dynamically from combined vote counts
+    let home_percentage = 0;
+    let draw_percentage = 0;
+    let away_percentage = 0;
+
+    if (total_votes > 0) {
+      // Calculate raw percentages
+      const rawHomePercent = (home_votes / total_votes) * 100;
+      const rawDrawPercent = (draw_votes / total_votes) * 100;
+      const rawAwayPercent = (away_votes / total_votes) * 100;
+
+      // Round percentages
+      home_percentage = Math.round(rawHomePercent);
+      draw_percentage = Math.round(rawDrawPercent);
+      away_percentage = Math.round(rawAwayPercent);
+
+      // Normalize to ensure they sum to exactly 100
+      const percentageSum = home_percentage + draw_percentage + away_percentage;
+      if (percentageSum !== 100 && total_votes > 0) {
+        // Adjust the largest percentage to make the sum exactly 100
+        const diff = 100 - percentageSum;
+        if (home_votes >= draw_votes && home_votes >= away_votes) {
+          home_percentage += diff;
+        } else if (away_votes >= home_votes && away_votes >= draw_votes) {
+          away_percentage += diff;
+        } else {
+          draw_percentage += diff;
+        }
       }
-      throw error;
     }
 
     return res.status(200).json({
       success: true,
-      data
+      data: {
+        vote_id: userVotes?.vote_id || 0,
+        match_id: parseInt(id),
+        home_votes,
+        draw_votes,
+        away_votes,
+        total_votes,
+        home_percentage,
+        draw_percentage,
+        away_percentage,
+        // Include breakdown for transparency
+        user_votes: {
+          home: user_home_votes,
+          draw: user_draw_votes,
+          away: user_away_votes,
+          total: user_home_votes + user_draw_votes + user_away_votes
+        },
+        admin_votes: {
+          home: admin_home_votes,
+          draw: admin_draw_votes,
+          away: admin_away_votes,
+          total: admin_home_votes + admin_draw_votes + admin_away_votes
+        }
+      }
     });
   } catch (error: any) {
     console.error('Error fetching match vote counts:', error);
@@ -220,22 +174,162 @@ export const updateMatchVoteCounts = async (req: Request, res: Response) => {
   }
 };
 
-// Get score predictions for a match
+// Update admin match vote counts
+export const updateAdminMatchVoteCounts = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { home_votes, draw_votes, away_votes } = req.body;
+    
+    // Calculate total votes
+    const total_votes = home_votes + draw_votes + away_votes;
+
+    // Check if vote counts already exist for this match
+    const { data: existingVoteCounts, error: fetchError } = await supabase
+      .from('admin_match_vote_counts')
+      .select('vote_id')
+      .eq('match_id', id)
+      .maybeSingle();
+
+    let result;
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      throw fetchError;
+    }
+
+    if (existingVoteCounts) {
+      // Update existing vote counts
+      const { data, error } = await supabase
+        .from('admin_match_vote_counts')
+        .update({
+          home_votes,
+          draw_votes,
+          away_votes,
+          total_votes
+        })
+        .eq('match_id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      result = data;
+    } else {
+      // Create new vote counts
+      const { data, error } = await supabase
+        .from('admin_match_vote_counts')
+        .insert([{
+          match_id: parseInt(id),
+          home_votes,
+          draw_votes,
+          away_votes,
+          total_votes
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      result = data;
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Admin vote counts updated successfully',
+      data: result
+    });
+  } catch (error: any) {
+    console.error('Error updating admin vote counts:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update admin vote counts',
+      error: error.message
+    });
+  }
+};
+
+// Get score predictions for a match with calculated percentages (combines user and admin predictions)
 export const getScorePredictions = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
 
-    const { data, error } = await supabase
+    // Fetch user score predictions
+    const { data: userPredictions, error: userError } = await supabase
       .from('score_predictions')
       .select('*')
-      .eq('match_id', id)
-      .order('vote_count', { ascending: false });
+      .eq('match_id', id);
 
-    if (error) throw error;
+    if (userError) throw userError;
+
+    // Fetch admin score predictions
+    const { data: adminPredictions, error: adminError } = await supabase
+      .from('admin_score_predictions')
+      .select('*')
+      .eq('match_id', id);
+
+    if (adminError) throw adminError;
+
+    // Combine predictions by score
+    const combinedPredictionsMap = new Map<string, any>();
+
+    // Add user predictions
+    userPredictions?.forEach(pred => {
+      const key = `${pred.home_score}-${pred.away_score}`;
+      const voteCount = pred.vote_count || 0; // Handle null values
+      combinedPredictionsMap.set(key, {
+        score_pred_id: pred.score_pred_id,
+        match_id: pred.match_id,
+        home_score: pred.home_score,
+        away_score: pred.away_score,
+        vote_count: voteCount,
+        user_votes: voteCount,
+        admin_votes: 0
+      });
+    });
+
+    // Add or merge admin predictions
+    adminPredictions?.forEach(pred => {
+      const key = `${pred.home_score}-${pred.away_score}`;
+      const voteCount = pred.vote_count || 0; // Handle null values
+      if (combinedPredictionsMap.has(key)) {
+        const existing = combinedPredictionsMap.get(key);
+        existing.vote_count += voteCount;
+        existing.admin_votes = voteCount;
+      } else {
+        combinedPredictionsMap.set(key, {
+          score_pred_id: pred.score_pred_id,
+          match_id: pred.match_id,
+          home_score: pred.home_score,
+          away_score: pred.away_score,
+          vote_count: voteCount,
+          user_votes: 0,
+          admin_votes: voteCount
+        });
+      }
+    });
+
+    // Convert map to array
+    const combinedPredictions = Array.from(combinedPredictionsMap.values());
+
+    // Calculate total votes (filter out null values)
+    const totalVotes = combinedPredictions.reduce((sum, pred) => sum + (pred.vote_count || 0), 0);
+
+    // Add calculated percentages to each prediction and sort by vote count
+    const predictionsWithPercentages = combinedPredictions
+      .map(pred => {
+        const voteCount = pred.vote_count || 0; // Handle null
+        const percentage = totalVotes > 0 
+          ? Math.round((voteCount / totalVotes) * 100) 
+          : 0;
+        
+        return {
+          ...pred,
+          vote_count: voteCount, // Ensure vote_count is never null
+          percentage
+        };
+      })
+      .sort((a, b) => (b.vote_count || 0) - (a.vote_count || 0));
 
     return res.status(200).json({
       success: true,
-      data
+      data: predictionsWithPercentages,
+      total_votes: totalVotes
     });
   } catch (error: any) {
     console.error('Error fetching score predictions:', error);
@@ -247,26 +341,63 @@ export const getScorePredictions = async (req: Request, res: Response) => {
   }
 };
 
-// Vote for a score prediction
+// Vote for a score prediction (user votes only)
 export const voteScorePrediction = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { home_score, away_score } = req.body;
-    
-    // Extract user_type from authenticated user
-    const userType = (req as any).user?.type || 'user';
+    const { home_score, away_score, user_id } = req.body;
 
-
-    // Validate user_type value
-    const validUserTypes = ['user', 'admin'];
-    if (!validUserTypes.includes(userType)) {
+    if (!user_id) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid user_type value. Must be one of: user, admin'
+        message: 'user_id is required'
       });
     }
 
-    // Check if this score prediction already exists
+    // Check if user has already voted on any score prediction for this match
+    const { data: userPreviousVotes, error: prevVoteError } = await supabase
+      .from('user_score_votes')
+      .select('*')
+      .eq('match_id', id)
+      .eq('user_id', user_id)
+      .maybeSingle();
+
+    if (prevVoteError && prevVoteError.code !== 'PGRST116') {
+      throw prevVoteError;
+    }
+
+    const previousVote = userPreviousVotes;
+    const newVoteKey = `${home_score}-${away_score}`;
+    const previousVoteKey = previousVote ? `${previousVote.home_score}-${previousVote.away_score}` : null;
+
+    // If user is voting for the same score, do nothing
+    if (previousVoteKey === newVoteKey) {
+      return res.status(200).json({
+        success: true,
+        message: 'Already voted for this score',
+        data: null
+      });
+    }
+
+    // If user had a previous vote, decrement that prediction's count
+    if (previousVote) {
+      const { data: oldPrediction } = await supabase
+        .from('score_predictions')
+        .select('*')
+        .eq('match_id', id)
+        .eq('home_score', previousVote.home_score)
+        .eq('away_score', previousVote.away_score)
+        .maybeSingle();
+
+      if (oldPrediction) {
+        await supabase
+          .from('score_predictions')
+          .update({ vote_count: Math.max(0, (oldPrediction.vote_count || 1) - 1) })
+          .eq('score_pred_id', oldPrediction.score_pred_id);
+      }
+    }
+
+    // Check if the new score prediction exists
     const { data: existingPrediction, error: fetchError } = await supabase
       .from('score_predictions')
       .select('*')
@@ -275,27 +406,23 @@ export const voteScorePrediction = async (req: Request, res: Response) => {
       .eq('away_score', away_score)
       .maybeSingle();
 
-    if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 means no rows returned
+    if (fetchError && fetchError.code !== 'PGRST116') {
       throw fetchError;
     }
 
     let result;
     if (existingPrediction) {
-      // Update existing prediction vote count
+      // Increment the new prediction's count
       const { data, error } = await supabase
         .from('score_predictions')
         .update({ 
-          vote_count: existingPrediction.vote_count + 1,
-          user_type: userType // Preserve the user_type when updating
+          vote_count: (existingPrediction.vote_count || 0) + 1
         })
         .eq('score_pred_id', existingPrediction.score_pred_id)
         .select()
         .single();
 
-      if (error) {
-        throw error;
-      }
-
+      if (error) throw error;
       result = data;
     } else {
       // Create new score prediction
@@ -305,17 +432,36 @@ export const voteScorePrediction = async (req: Request, res: Response) => {
           match_id: parseInt(id),
           home_score,
           away_score,
-          vote_count: 1,
-          user_type: userType
+          vote_count: 1
         }])
         .select()
         .single();
 
-      if (error) {
-        throw error;
-      }
-
+      if (error) throw error;
       result = data;
+    }
+
+    // Update or create user's vote record
+    if (previousVote) {
+      // Update existing vote record
+      await supabase
+        .from('user_score_votes')
+        .update({
+          home_score,
+          away_score,
+          voted_at: new Date().toISOString()
+        })
+        .eq('vote_id', previousVote.vote_id);
+    } else {
+      // Create new vote record
+      await supabase
+        .from('user_score_votes')
+        .insert([{
+          match_id: parseInt(id),
+          user_id,
+          home_score,
+          away_score
+        }]);
     }
 
     // Update match vote counts based on score predictions
@@ -323,7 +469,6 @@ export const voteScorePrediction = async (req: Request, res: Response) => {
       await updateMatchVoteCountsFromScorePredictions(parseInt(id));
     } catch (voteCountError) {
       console.error('Failed to update vote counts:', voteCountError);
-      // Don't fail the whole request if vote count update fails
     }
 
     return res.status(200).json({
@@ -341,20 +486,11 @@ export const voteScorePrediction = async (req: Request, res: Response) => {
   }
 };
 
-// Update score prediction with specific values and vote count
+// Update score prediction with specific values and vote count (user predictions)
 export const updateScorePredictionVoteCount = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { score_pred_id, home_score, away_score, vote_count, user_type = 'user' } = req.body;
-
-    // Validate user_type value
-    const validUserTypes = ['user', 'admin'];
-    if (!validUserTypes.includes(user_type)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid user_type value. Must be one of: user, admin'
-      });
-    }
+    const { score_pred_id, home_score, away_score, vote_count } = req.body;
 
     let result;
     
@@ -365,8 +501,7 @@ export const updateScorePredictionVoteCount = async (req: Request, res: Response
         .update({ 
           home_score: home_score,
           away_score: away_score,
-          vote_count: vote_count,
-          user_type: user_type
+          vote_count: vote_count
         })
         .eq('score_pred_id', score_pred_id)
         .select()
@@ -382,7 +517,7 @@ export const updateScorePredictionVoteCount = async (req: Request, res: Response
         .eq('match_id', id)
         .eq('home_score', home_score)
         .eq('away_score', away_score)
-        .single();
+        .maybeSingle();
 
       if (fetchError && fetchError.code !== 'PGRST116') {
         throw fetchError;
@@ -395,8 +530,7 @@ export const updateScorePredictionVoteCount = async (req: Request, res: Response
           .update({ 
             home_score: home_score,
             away_score: away_score,
-            vote_count: vote_count,
-            user_type: user_type
+            vote_count: vote_count
           })
           .eq('score_pred_id', existingPrediction.score_pred_id)
           .select()
@@ -412,8 +546,7 @@ export const updateScorePredictionVoteCount = async (req: Request, res: Response
             match_id: parseInt(id),
             home_score,
             away_score,
-            vote_count,
-            user_type
+            vote_count
           }])
           .select()
           .single();
@@ -433,6 +566,151 @@ export const updateScorePredictionVoteCount = async (req: Request, res: Response
     return res.status(500).json({
       success: false,
       message: 'Failed to update score prediction',
+      error: error.message
+    });
+  }
+};
+
+// Update admin score prediction with specific values and vote count
+export const updateAdminScorePredictionVoteCount = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { score_pred_id, home_score, away_score, vote_count } = req.body;
+
+    let result;
+    
+    // If score_pred_id is provided, update existing prediction
+    if (score_pred_id) {
+      // First check if the record exists
+      const { data: existing, error: checkError } = await supabase
+        .from('admin_score_predictions')
+        .select('*')
+        .eq('score_pred_id', score_pred_id)
+        .maybeSingle();
+
+      if (checkError) throw checkError;
+
+      if (existing) {
+        // Update existing record
+        const { data, error } = await supabase
+          .from('admin_score_predictions')
+          .update({ 
+            home_score: home_score,
+            away_score: away_score,
+            vote_count: vote_count
+          })
+          .eq('score_pred_id', score_pred_id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        result = data;
+      } else {
+        // Record with this ID doesn't exist, check if a record with same scores exists
+        const { data: existingByScores, error: scoreCheckError } = await supabase
+          .from('admin_score_predictions')
+          .select('*')
+          .eq('match_id', id)
+          .eq('home_score', home_score)
+          .eq('away_score', away_score)
+          .maybeSingle();
+
+        if (scoreCheckError) throw scoreCheckError;
+
+        if (existingByScores) {
+          // Update the existing record with same scores
+          const { data, error } = await supabase
+            .from('admin_score_predictions')
+            .update({ 
+              vote_count: vote_count
+            })
+            .eq('score_pred_id', existingByScores.score_pred_id)
+            .select()
+            .single();
+
+          if (error) throw error;
+          result = data;
+        } else {
+          // No record exists with these scores, create new one
+          const { data, error } = await supabase
+            .from('admin_score_predictions')
+            .insert([{
+              match_id: parseInt(id),
+              home_score,
+              away_score,
+              vote_count
+            }])
+            .select()
+            .single();
+
+          if (error) throw error;
+          result = data;
+        }
+      }
+    } else {
+      // Check if this score prediction already exists by matching scores
+      const { data: existingPredictions, error: fetchError } = await supabase
+        .from('admin_score_predictions')
+        .select('*')
+        .eq('match_id', id)
+        .eq('home_score', home_score)
+        .eq('away_score', away_score);
+
+      if (fetchError) {
+        throw fetchError;
+      }
+
+      if (existingPredictions && existingPredictions.length > 0) {
+        // If there are duplicates, delete all except the first one
+        if (existingPredictions.length > 1) {
+          const idsToDelete = existingPredictions.slice(1).map(p => p.score_pred_id);
+          await supabase
+            .from('admin_score_predictions')
+            .delete()
+            .in('score_pred_id', idsToDelete);
+        }
+
+        // Update the first/remaining prediction
+        const existingPrediction = existingPredictions[0];
+        const { data, error } = await supabase
+          .from('admin_score_predictions')
+          .update({ 
+            vote_count: vote_count
+          })
+          .eq('score_pred_id', existingPrediction.score_pred_id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        result = data;
+      } else {
+        // Create new score prediction
+        const { data, error } = await supabase
+          .from('admin_score_predictions')
+          .insert([{
+            match_id: parseInt(id),
+            home_score,
+            away_score,
+            vote_count
+          }])
+          .select()
+          .single();
+
+        if (error) throw error;
+        result = data;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Admin score prediction updated successfully',
+      data: result
+    });
+  } catch (error: any) {
+    console.error('Error updating admin score prediction:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update admin score prediction',
       error: error.message
     });
   }

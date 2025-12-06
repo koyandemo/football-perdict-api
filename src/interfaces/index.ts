@@ -50,15 +50,6 @@ export interface Match extends BaseEntity {
   published?: boolean;
 }
 
-// Match Outcome entity
-export interface MatchOutcome extends BaseEntity {
-  outcome_id?: number;
-  match_id: number;
-  home_win_prob: number;
-  draw_prob: number;
-  away_win_prob: number;
-}
-
 // Match Vote Count entity
 export interface MatchVoteCount extends BaseEntity {
   vote_id?: number;
